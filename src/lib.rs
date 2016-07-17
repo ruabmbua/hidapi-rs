@@ -244,4 +244,11 @@ impl <'a> HidDevice<'a> {
             ffi::hid_send_feature_report(self._hid_device, data.as_ptr(), data.len() as size_t)
         }
     }
+
+    pub fn get_feature_report(&self, report: u8, data: &mut [u8]) -> i32 {
+        data[0] = report;
+        unsafe {
+            ffi::hid_get_feature_report(self._hid_device, data.as_mut_ptr(), data.len() as size_t)
+        }
+    }
 }
