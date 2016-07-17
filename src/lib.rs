@@ -82,7 +82,7 @@ impl HidApi {
 
     pub fn devices(&self) -> Vec<HidDeviceInfo> {
         self.devices.clone()
-    } 
+    }
 
     pub fn open(&self, vendor_id: u16, product_id: u16) -> Result<HidDevice, &'static str> {
         let device = unsafe {ffi::hid_open(vendor_id, product_id, std::ptr::null())};
@@ -239,16 +239,16 @@ impl <'a> HidDevice<'a> {
         }
     }
 
-    pub fn send_feature_report(&self, data: &[u8]) -> i32 {
+    pub fn send_feature_report(&self, data: &[u8]) -> usize {
         unsafe {
-            ffi::hid_send_feature_report(self._hid_device, data.as_ptr(), data.len() as size_t)
+            ffi::hid_send_feature_report(self._hid_device, data.as_ptr(), data.len() as size_t) as usize
         }
     }
 
-    pub fn get_feature_report(&self, report: u8, data: &mut [u8]) -> i32 {
+    pub fn get_feature_report(&self, report: u8, data: &mut [u8]) -> usize {
         data[0] = report;
         unsafe {
-            ffi::hid_get_feature_report(self._hid_device, data.as_mut_ptr(), data.len() as size_t)
+            ffi::hid_get_feature_report(self._hid_device, data.as_mut_ptr(), data.len() as size_t) as usize
         }
     }
 }
