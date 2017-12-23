@@ -14,6 +14,12 @@ build = "build.rs"
 links = "hidapi"
 documentation = "https://docs.rs/hidapi"
 
+[features]
+# Enable this feature to use hidraw backend instead of
+# libusb-1.0 on Linux. Enabling this feature does not
+# affect other platforms.
+linux-hidraw = []
+
 [dependencies]
 libc = "0.2.15"
 

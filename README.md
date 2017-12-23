@@ -13,6 +13,18 @@ used by adding `hidapi` to the dependencies in your project's `Cargo.toml`.
 [dependencies]
 hidapi = "0.3"
 ```
+
+On Linux you can choose between two hidapi backends: `libusb-1.0` or `hidraw`.
+`libusb-1.0` backend in selected by default. If you want to use `hidraw` backend
+enable `linux-hidraw` feature like this:
+
+```toml
+[dependencies]
+hidapi = {version="*", features=["linux-hidraw"]}
+```
+
+
+
 # Example
 
 ```rust
