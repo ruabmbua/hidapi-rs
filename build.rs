@@ -24,11 +24,23 @@ fn main() {
     compile();
 }
 
-#[cfg(target_os = "linux")]
+
+#[cfg(all(target_os = "linux", not(feature="linux-hidraw")))]
 fn compile() {
     let mut config = gcc::Config::new();
     config.file("etc/hidapi/libusb/hid.c").include("etc/hidapi/hidapi");
     let lib = pkg_config::find_library("libusb-1.0").expect("Unable to find libusb-1.0");
+    for path in lib.include_paths {
+        config.include(path.to_str().expect("Failed to convert include path to str"));
+    }
+    config.compile("libhidapi.a");
+}
+
+#[cfg(all(target_os = "linux", feature="linux-hidraw"))]
+fn compile() {
+    let mut config = gcc::Config::new();
+    config.file("etc/hidapi/linux/hid.c").include("etc/hidapi/hidapi");
+    let lib = pkg_config::find_library("libudev").expect("Unable to find libudev");
     for path in lib.include_paths {
         config.include(path.to_str().expect("Failed to convert include path to str"));
     }
