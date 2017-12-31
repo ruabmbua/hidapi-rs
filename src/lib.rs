@@ -331,9 +331,9 @@ impl<'a> HidDevice<'a> {
         }
     }
 
-    /// Set the first byte of `data` to the 'Report ID' of the report to be read.
+    /// Set the first byte of `buf` to the 'Report ID' of the report to be read.
     /// Upon return, the first byte will still contain the Report ID, and the
-    /// report data will start in data[1].
+    /// report data will start in buf[1].
     pub fn get_feature_report(&self, buf: &mut [u8]) -> HidResult<usize> {
         let res = unsafe {
             ffi::hid_get_feature_report(self._hid_device, buf.as_mut_ptr(), buf.len() as size_t)
