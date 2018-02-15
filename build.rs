@@ -20,36 +20,33 @@
 extern crate gcc;
 extern crate pkg_config;
 
+use std::env;
+
 fn main() {
-    compile();
-}
+    let target = env::var("TARGET").unwrap();
 
-#[cfg(target_os = "linux")]
-fn compile() {
-    let mut config = gcc::Config::new();
-    config.file("etc/hidapi/libusb/hid.c").include("etc/hidapi/hidapi");
-    let lib = pkg_config::find_library("libusb-1.0").expect("Unable to find libusb-1.0");
-    for path in lib.include_paths {
-        config.include(path.to_str().expect("Failed to convert include path to str"));
+    if target.contains("windows") {
+        gcc::Config::new()
+            .file("etc/hidapi/windows/hid.c")
+            .include("etc/hidapi/hidapi")
+            .compile("libhidapi.a");
+        println!("cargo:rustc-link-lib=setupapi");
+
+    } else if target.contains("macos") {
+        gcc::Config::new()
+            .file("etc/hidapi/mac/hid.c")
+            .include("etc/hidapi/hidapi")
+            .compile("libhidapi.a");
+        println!("cargo:rustc-link-lib=framework=IOKit");
+        println!("cargo:rustc-link-lib=framework=CoreFoundation");
+
+    } else if target.contains("linux") {
+        let mut config = gcc::Config::new();
+        config.file("etc/hidapi/libusb/hid.c").include("etc/hidapi/hidapi");
+        let lib = pkg_config::find_library("libusb-1.0").expect("Unable to find libusb-1.0");
+        for path in lib.include_paths {
+            config.include(path.to_str().expect("Failed to convert include path to str"));
+        }
+        config.compile("libhidapi.a");
     }
-    config.compile("libhidapi.a");
-}
-
-#[cfg(target_os = "windows")]
-fn compile() {
-    gcc::Config::new()
-        .file("etc/hidapi/windows/hid.c")
-        .include("etc/hidapi/hidapi")
-        .compile("libhidapi.a");
-    println!("cargo:rustc-link-lib=setupapi");
-}
-
-#[cfg(target_os = "macos")]
-fn compile() {
-    gcc::Config::new()
-        .file("etc/hidapi/mac/hid.c")
-        .include("etc/hidapi/hidapi")
-        .compile("libhidapi.a");
-    println!("cargo:rustc-link-lib=framework=IOKit");
-    println!("cargo:rustc-link-lib=framework=CoreFoundation");
 }
