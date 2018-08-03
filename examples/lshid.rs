@@ -4,7 +4,6 @@
     This file is part of hidapi-rs, based on hidapi_rust by Roland Ruckerbauer.
 ****************************************************************************/
 
-
 //! Prints out a list of HID devices
 
 extern crate hidapi;
