@@ -16,7 +16,7 @@ extern crate hidapi;
 
 let api = hidapi::HidApi::new().unwrap();
 // Print out information about all connected devices
-for device in &api.devices() {
+for device in api.devices() {
     println!("{:#?}", device);
 }
 
