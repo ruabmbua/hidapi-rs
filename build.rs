@@ -40,7 +40,7 @@ fn compile_linux() {
     // First check the features enabled for the crate.
     // Only one linux backend should be enabled at a time.
 
-    let avail_backends: [(&'static str, Box<Fn()>); 4] = [
+    let avail_backends: Vec<(&'static str, Box<Fn()>)> = vec![
         (
             "LINUX_STATIC_HIDRAW",
             Box::new(|| {
@@ -82,6 +82,12 @@ fn compile_linux() {
                 pkg_config::probe_library("hidapi-libusb").expect("Unable to find hidapi-libusb");
             }),
         ),
+        (
+            "LINUX_RUST_HIDRAW",
+            Box::new(|| {
+                // Nothing to do here
+            }),
+        ),
     ];
 
     let mut backends = avail_backends
@@ -95,16 +101,6 @@ fn compile_linux() {
     // Build it!
     (backends.next().unwrap().1)();
 }
-
-//#[cfg(all(feature = "shared-libusb", not(feature = "shared-hidraw")))]
-//fn compile_linux() {
-//
-//}
-//
-//#[cfg(all(feature = "shared-hidraw"))]
-//fn compile_linux() {
-//
-//}
 
 fn compile_windows() {
     cc::Build::new()

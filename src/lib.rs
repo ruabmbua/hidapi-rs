@@ -40,7 +40,9 @@ extern crate failure_derive;
 extern crate failure;
 extern crate libc;
 
+mod backend;
 mod error;
+#[cfg(not(feature = "linux-rust-hidraw"))]
 mod ffi;
 
 use failure::Error;
@@ -76,6 +78,15 @@ impl HidApiLock {
 }
 
 impl Drop for HidApiLock {
+    #[cfg(not(feature = "linux-rust-hidraw"))]
+    fn drop(&mut self) {
+        unsafe {
+            ffi::hid_exit();
+            HID_API_LOCK = false;
+        }
+    }
+
+    #[cfg(feature = "linux-rust-hidraw")]
     fn drop(&mut self) {
         unsafe {
             ffi::hid_exit();
