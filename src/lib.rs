@@ -42,8 +42,6 @@ extern crate libc;
 
 mod backend;
 mod error;
-#[cfg(not(feature = "linux-rust-hidraw"))]
-mod ffi;
 
 use failure::Error;
 use libc::{c_int, size_t, wchar_t};

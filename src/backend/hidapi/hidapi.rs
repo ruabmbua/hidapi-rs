@@ -4,4 +4,6 @@
 // This file is part of hidapi-rs, based on hidapi-rs by Osspial
 // **************************************************************************
 
-pub struct HidrawBackend;
+mod ffi;
+
+pub struct HidapiBackend;
