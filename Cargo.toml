@@ -17,14 +17,14 @@ documentation = "https://docs.rs/hidapi"
 
 [features]
 default = ["linux-rust-hidraw"]
-linux-static-libusb = []
-linux-static-hidraw = []
-linux-shared-libusb = []
-linux-shared-hidraw = []
+linux-static-libusb = ["libc"]
+linux-static-hidraw = ["libc"]
+linux-shared-libusb = ["libc"]
+linux-shared-hidraw = ["libc"]
 linux-rust-hidraw = ["udev", "nix"]
 
 [dependencies]
-libc = "0.2.33"
+libc = { version = "0.2.33", optional = true }
 failure = "0.1.2"
 failure_derive = "0.1.2"
 udev = { version = "0.2.0", optional = true }

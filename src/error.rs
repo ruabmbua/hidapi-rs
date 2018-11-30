@@ -4,9 +4,10 @@
 // This file is part of hidapi-rs, based on hidapi-rs by Osspial
 // **************************************************************************
 
-use super::HidDeviceInfo;
 use failure::{Compat, Error};
 use libc::wchar_t;
+
+pub type HidResult<T> = Result<T, HidError>;
 
 #[derive(Debug, Fail)]
 pub enum HidError {
@@ -32,12 +33,9 @@ pub enum HidError {
     InvalidZeroSizeData,
     #[fail(
         display = "Failed to send all data: only sent {} out of {} bytes",
-        sent,
-        all
+        sent, all
     )]
     IncompleteSendError { sent: usize, all: usize },
     #[fail(display = "Can not set blocking mode to '{}'", mode)]
     SetBlockingModeError { mode: &'static str },
-    #[fail(display = "Can not open hid device with: {:?}", device_info)]
-    OpenHidDeviceWithDeviceInfoError { device_info: HidDeviceInfo },
 }
