@@ -6,7 +6,7 @@
 
 use failure::{Compat, Error};
 #[cfg(not(feature = "linux-rust-hidraw"))]
-use ::backend::libc::wchar_t;
+use crate::backend::libc::wchar_t;
 
 pub type HidResult<T> = Result<T, HidError>;
 

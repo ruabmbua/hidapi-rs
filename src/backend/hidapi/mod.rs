@@ -12,7 +12,7 @@ use failure::Fail;
 use std::ffi::CStr;
 use std::io::{Read, Write};
 
-use backend::{ApiBackend, ApiDevice, ApiDeviceInfo};
+use crate::backend::{ApiBackend, ApiDevice, ApiDeviceInfo};
 
 pub struct HidapiBackend {
     api: HidApi,
@@ -124,7 +124,7 @@ use std::ffi::CString;
 use std::mem::ManuallyDrop;
 use std::rc::Rc;
 
-use error::{HidError, HidResult};
+use crate::error::{HidError, HidResult};
 const STRING_BUF_LEN: usize = 128;
 
 /// Hidapi context and device member, which ensures deinitialization

@@ -19,7 +19,7 @@ pub use self::hidapi::HidapiBackend as Backend;
 #[cfg(not(feature = "linux-rust-hidraw"))]
 pub use self::hidapi::libc as libc;
 
-use error::{HidError, HidResult};
+use crate::error::{HidError, HidResult};
 use std::io::{Read, Write};
 
 pub trait ApiBackend
