@@ -4,7 +4,7 @@
 /// This file is part of hidapi-rs, based on hidapi_rust by Roland Ruckerbauer.
 /// *************************************************************************
 // For documentation look at the corresponding C header file hidapi.h
-use libc::{c_char, c_int, c_uchar, c_ushort, c_void, size_t, wchar_t};
+use super::libc::{c_char, c_int, c_uchar, c_ushort, c_void, size_t, wchar_t};
 
 pub type HidDevice = c_void;
 

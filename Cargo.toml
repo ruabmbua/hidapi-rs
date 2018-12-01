@@ -21,14 +21,14 @@ linux-static-libusb = ["libc"]
 linux-static-hidraw = ["libc"]
 linux-shared-libusb = ["libc"]
 linux-shared-hidraw = ["libc"]
-linux-rust-hidraw = ["udev", "nix"]
+linux-rust-hidraw = ["libudev", "nix"]
 
 [dependencies]
 libc = { version = "0.2.33", optional = true }
 failure = "0.1.2"
 failure_derive = "0.1.2"
-udev = { version = "0.2.0", optional = true }
 nix = { version = "0.11.0", optional = true }
+libudev = { version = "0.2.0", optional = true }
 
 [build-dependencies]
 cc = "1.0.3"

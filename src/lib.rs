@@ -39,9 +39,6 @@
 extern crate failure_derive;
 extern crate failure;
 
-#[cfg(not(feature = "linux-rust-hidraw"))]
-extern crate libc;
-
 mod backend;
 mod error;
 

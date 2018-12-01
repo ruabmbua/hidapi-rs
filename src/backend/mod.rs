@@ -16,16 +16,18 @@ mod hidapi;
 #[cfg(not(feature = "linux-rust-hidraw"))]
 pub use self::hidapi::HidapiBackend as Backend;
 
+#[cfg(not(feature = "linux-rust-hidraw"))]
+pub use self::hidapi::libc as libc;
+
 use error::{HidError, HidResult};
 use std::io::{Read, Write};
 
 pub trait ApiBackend
 where
     Self: Sized,
-    Self::Device: ApiDevice,
+    Self::Device: ApiDevice + Read + Write,
     Self::DeviceInfo: ApiDeviceInfo,
     Self::DeviceInfoIter: Iterator<Item = Self::DeviceInfo>,
-    Self::Device: Write,
 {
     type Device;
     type DeviceInfo;
@@ -33,10 +35,19 @@ where
 
     fn create() -> HidResult<Self>;
     fn open_device(&self, vid: u16, pid: u16) -> HidResult<Self::Device>;
+    fn open_device_with_serial(&self, vid: u16, pid: u16, serial: &str) -> HidResult<Self::Device>;
     fn enumerate(&mut self) -> HidResult<Self::DeviceInfoIter>;
 }
 
-pub trait ApiDevice: Write {}
+pub trait ApiDevice: Write + Read {
+    fn write_report_id(&mut self, report_id: u8, data: &[u8]) -> std::io::Result<usize> {
+        let mut buf = Vec::with_capacity(data.len() + 1);
+        buf.push(report_id);
+        buf.extend_from_slice(data);
+
+        self.write(buf.as_slice())
+    }
+}
 
 pub trait ApiDeviceInfo {
     fn path(&self) -> Option<String>;

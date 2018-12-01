@@ -4,6 +4,8 @@
 // This file is part of hidapi-rs, based on hidapi-rs by Osspial
 // **************************************************************************
 
+pub extern crate libc;
+
 mod ffi;
 
 use failure::Fail;
@@ -30,6 +32,12 @@ impl ApiBackend for HidapiBackend {
     fn open_device(&self, vid: u16, pid: u16) -> HidResult<HidapiDevice> {
         Ok(HidapiDevice {
             device: self.api.open(vid, pid)?,
+        })
+    }
+
+    fn open_device_with_serial(&self, vid: u16, pid: u16, serial: &str) -> HidResult<Self::Device> {
+        Ok(HidapiDevice {
+            device: self.api.open_serial(vid, pid, serial)?,
         })
     }
 
@@ -63,9 +71,13 @@ impl Write for HidapiDevice {
     }
 }
 
-// impl Read for HidapiDevice {
-
-// }
+impl Read for HidapiDevice {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        self.device
+            .read(buf)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.compat()))
+    }
+}
 
 pub struct HidapiDeviceInfo(HidDeviceInfo);
 
@@ -107,7 +119,7 @@ impl ApiDeviceInfo for HidapiDeviceInfo {
 }
 
 use failure::Error;
-use libc::{c_int, size_t, wchar_t};
+use self::libc::{c_int, size_t, wchar_t};
 use std::ffi::CString;
 use std::mem::ManuallyDrop;
 use std::rc::Rc;

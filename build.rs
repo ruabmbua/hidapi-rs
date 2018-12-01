@@ -85,7 +85,7 @@ fn compile_linux() {
         (
             "LINUX_RUST_HIDRAW",
             Box::new(|| {
-                // Nothing to do here
+                // Nothing to do here. libudev will be handled by libudev crate.
             }),
         ),
     ];
