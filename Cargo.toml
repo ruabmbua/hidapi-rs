@@ -14,6 +14,7 @@ keywords = ["hid", "api", "usb","binding", "wrapper"]
 build = "build.rs"
 links = "hidapi"
 documentation = "https://docs.rs/hidapi"
+edition = "2018"
 
 [features]
 default = ["linux-rust-hidraw"]
