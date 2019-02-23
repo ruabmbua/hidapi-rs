@@ -49,6 +49,7 @@ use std::ffi::CStr;
 use std::ffi::CString;
 use std::mem::ManuallyDrop;
 use std::rc::Rc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 pub use error::HidError;
 pub type HidResult<T> = Result<T, HidError>;
@@ -60,13 +61,13 @@ struct HidApiLock;
 
 impl HidApiLock {
     fn acquire() -> HidResult<HidApiLock> {
-        if unsafe { !HID_API_LOCK } {
+        if HID_API_LOCK.compare_and_swap(false, true, Ordering::SeqCst) {
             // Initialize the HID and prevent other HIDs from being created
             unsafe {
                 if ffi::hid_init() == -1 {
+                    HID_API_LOCK.store(false, Ordering::SeqCst);
                     return Err(HidError::InitializationError);
                 }
-                HID_API_LOCK = true;
                 Ok(HidApiLock)
             }
         } else {
@@ -77,10 +78,8 @@ impl HidApiLock {
 
 impl Drop for HidApiLock {
     fn drop(&mut self) {
-        unsafe {
-            ffi::hid_exit();
-            HID_API_LOCK = false;
-        }
+        unsafe { ffi::hid_exit(); }
+        HID_API_LOCK.store(false, Ordering::SeqCst);
     }
 }
 
@@ -91,7 +90,7 @@ pub struct HidApi {
     _lock: Rc<HidApiLock>,
 }
 
-static mut HID_API_LOCK: bool = false;
+static HID_API_LOCK: AtomicBool = AtomicBool::new(false);
 
 impl HidApi {
     /// Initializes the hidapi.
