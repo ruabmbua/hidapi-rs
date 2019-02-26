@@ -52,7 +52,9 @@ use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 pub use error::HidError;
+
 pub type HidResult<T> = Result<T, HidError>;
+
 const STRING_BUF_LEN: usize = 128;
 
 /// Hidapi context and device member, which ensures deinitialization
@@ -61,7 +63,12 @@ struct HidApiLock;
 
 impl HidApiLock {
     fn acquire() -> HidResult<HidApiLock> {
-        if HID_API_LOCK.compare_and_swap(false, true, Ordering::SeqCst) {
+        const EXPECTED_CURRENT: bool = false;
+
+        if EXPECTED_CURRENT == HID_API_LOCK.compare_and_swap(EXPECTED_CURRENT,
+                                                             true,
+                                                             Ordering::SeqCst) {
+
             // Initialize the HID and prevent other HIDs from being created
             unsafe {
                 if ffi::hid_init() == -1 {
