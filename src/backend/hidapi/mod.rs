@@ -118,8 +118,8 @@ impl ApiDeviceInfo for HidapiDeviceInfo {
     }
 }
 
-use failure::Error;
 use self::libc::{c_int, size_t, wchar_t};
+use failure::Error;
 use std::ffi::CString;
 use std::mem::ManuallyDrop;
 use std::rc::Rc;

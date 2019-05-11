@@ -4,9 +4,14 @@
 // This file is part of hidapi-rs, based on hidapi-rs by Osspial
 // **************************************************************************
 
-use failure::{Compat, Error};
-#[cfg(not(feature = "linux-rust-hidraw"))]
+#[cfg(any(
+    feature = "linux-static-hidraw",
+    feature = "linux-static-libusb",
+    feature = "linux-shared-hidraw",
+    feature = "linux-shared-libusb"
+))]
 use crate::backend::libc::wchar_t;
+use failure::{Compat, Error};
 
 pub type HidResult<T> = Result<T, HidError>;
 
@@ -27,7 +32,12 @@ pub enum HidError {
     #[fail(display = "hidapi error: (could not get error message)")]
     HidApiErrorEmpty,
 
-    #[cfg(not(feature = "linux-rust-hidraw"))]
+    #[cfg(any(
+        feature = "linux-static-hidraw",
+        feature = "linux-static-libusb",
+        feature = "linux-shared-hidraw",
+        feature = "linux-shared-libusb"
+    ))]
     #[fail(display = "failed converting {:#X} to rust char", wide_char)]
     FromWideCharError { wide_char: wchar_t },
 

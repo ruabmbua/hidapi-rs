@@ -4,20 +4,27 @@
 // This file is part of hidapi-rs, based on hidapi-rs by Osspial
 // **************************************************************************
 
-#[cfg(feature = "linux-rust-hidraw")]
-mod linux_hidraw;
+use cfg_if::cfg_if;
 
-#[cfg(feature = "linux-rust-hidraw")]
-pub use self::linux_hidraw::HidrawBackend as Backend;
+cfg_if! {
+    if #[cfg(feature = "linux-rust-hidraw")] {
+        mod linux_hidraw;
 
-#[cfg(not(feature = "linux-rust-hidraw"))]
-mod hidapi;
+        pub use self::linux_hidraw::HidrawBackend as Backend;
+    } else if #[cfg(any(
+        feature = "linux-static-hidraw",
+        feature = "linux-static-libusb",
+        feature = "linux-shared-hidraw",
+        feature = "linux-shared-libusb"
+    ))] {
+        mod hidapi;
 
-#[cfg(not(feature = "linux-rust-hidraw"))]
-pub use self::hidapi::HidapiBackend as Backend;
-
-#[cfg(not(feature = "linux-rust-hidraw"))]
-pub use self::hidapi::libc as libc;
+        pub use self::hidapi::HidapiBackend as Backend;
+        pub use self::hidapi::libc;
+    } else {
+        compile_error!("No backend selected!");
+    }
+}   
 
 use crate::error::{HidError, HidResult};
 use std::io::{Read, Write};
