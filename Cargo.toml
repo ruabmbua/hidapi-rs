@@ -25,12 +25,12 @@ linux-shared-hidraw = ["libc"]
 linux-rust-hidraw = ["libudev", "nix"]
 
 [dependencies]
-libc = { version = "0.2.33", optional = true }
-failure = "0.1.2"
-failure_derive = "0.1.2"
-nix = { version = "0.11.0", optional = true }
+libc = { version = "0.2.54", optional = true }
+failure = "0.1.5"
+failure_derive = "0.1.5"
+nix = { version = "0.13.0", optional = true }
 libudev = { version = "0.2.0", optional = true }
 
 [build-dependencies]
-cc = "1.0.3"
-pkg-config = "0.3.9"
+cc = "1.0.36"
+pkg-config = "0.3.14"
