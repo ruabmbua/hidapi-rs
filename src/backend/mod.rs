@@ -24,7 +24,7 @@ cfg_if! {
     } else {
         compile_error!("No backend selected!");
     }
-}   
+}
 
 use crate::error::{HidError, HidResult};
 use std::io::{Read, Write};

@@ -58,4 +58,20 @@ pub enum HidError {
 
     #[fail(display = "Can not set blocking mode to '{}'", mode)]
     SetBlockingModeError { mode: &'static str },
+
+    #[cfg(feature = "linux-rust-hidraw")]
+    #[fail(display = "Udev error: {}", udev_e)]
+    UdevError { udev_e: libudev::Error },
+}
+
+pub trait ResultExt<T> {
+    /// Convert any Result<T, E> into Result<T, HidError {E}>
+    fn convert(self) -> Result<T, HidError>;
+}
+
+#[cfg(feature = "linux-rust-hidraw")]
+impl<T> ResultExt<T> for Result<T, libudev::Error> {
+    fn convert(self) -> Result<T, HidError> {
+        self.map_err(|udev_e| HidError::UdevError { udev_e })
+    }
 }

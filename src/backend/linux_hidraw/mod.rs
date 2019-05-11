@@ -1,8 +1,14 @@
 use crate::backend::{ApiBackend, ApiDevice, ApiDeviceInfo};
-use crate::error::HidResult;
+use crate::error::{HidError, HidResult, ResultExt};
+use libudev::Context;
 use std::io::{self, Read, Write};
+mod udev_enumerator;
 
-pub struct HidrawBackend;
+use udev_enumerator::{Enumerator, DeviceInfo};
+
+pub struct HidrawBackend {
+    udev_ctx: Context,
+}
 
 impl ApiBackend for HidrawBackend {
     type Device = Device;
@@ -10,7 +16,8 @@ impl ApiBackend for HidrawBackend {
     type DeviceInfoIter = std::vec::IntoIter<DeviceInfo>;
 
     fn create() -> HidResult<Self> {
-        unimplemented!();
+        let udev = Context::new().map_err(|e| HidError::UdevError { udev_e: e })?;
+        Ok(Self { udev_ctx: udev })
     }
     fn open_device(&self, vid: u16, pid: u16) -> HidResult<Self::Device> {
         unimplemented!()
@@ -24,7 +31,6 @@ impl ApiBackend for HidrawBackend {
 }
 
 pub struct Device;
-pub struct DeviceInfo;
 
 impl Write for Device {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
@@ -37,39 +43,6 @@ impl Write for Device {
 
 impl Read for Device {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        unimplemented!()
-    }
-}
-
-impl ApiDeviceInfo for DeviceInfo {
-    fn path(&self) -> Option<String> {
-        unimplemented!()
-    }
-    fn vendor_id(&self) -> u16 {
-        unimplemented!()
-    }
-    fn product_id(&self) -> u16 {
-        unimplemented!()
-    }
-    fn serial_number(&self) -> Option<String> {
-        unimplemented!()
-    }
-    fn release_number(&self) -> u16 {
-        unimplemented!()
-    }
-    fn manufacturer_string(&self) -> Option<String> {
-        unimplemented!()
-    }
-    fn product_string(&self) -> Option<String> {
-        unimplemented!()
-    }
-    fn usage_page(&self) -> Option<u16> {
-        unimplemented!()
-    }
-    fn usage(&self) -> u16 {
-        unimplemented!()
-    }
-    fn interface_number(&self) -> i32 {
         unimplemented!()
     }
 }
