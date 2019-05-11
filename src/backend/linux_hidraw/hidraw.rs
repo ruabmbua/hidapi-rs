@@ -1,13 +1,16 @@
 //! Linux hidraw syscall interface abstraction
 
 use crate::error::{HidResult, ResultExt};
-use libc::{c_char, c_int, ioctl, O_NONBLOCK, O_RDWR};
+use libc::{c_char, c_int, O_NONBLOCK, O_RDWR};
 use nix::errno::Errno;
 use std::fs::File;
+use std::mem;
 use std::os::unix::ffi::OsStrExt;
-use std::os::unix::io::FromRawFd;
+use std::os::unix::io::{AsRawFd, FromRawFd};
 use std::path::Path;
 
+// Taken from the Linux kernel source tree (include/uapi/linux/hidraw.h):
+//
 // #define HID_MAX_DESCRIPTOR_SIZE 4096
 //
 // struct hidraw_report_descriptor {
@@ -108,11 +111,15 @@ ioctl_readwrite_buf!(
     c_char
 );
 
-pub struct Hidraw {
+pub struct HidrawDevice {
     file: File,
 }
 
-impl Hidraw {
+struct Info {
+    
+}
+
+impl HidrawDevice {
     pub fn from_path(path: &Path) -> HidResult<Self> {
         let fd = unsafe {
             libc::open(
@@ -125,5 +132,25 @@ impl Hidraw {
         let file = unsafe { File::from_raw_fd(fd) };
 
         Ok(Self { file })
+    }
+
+    /// Fetches all the available info, which can be interpreted
+    /// independently.
+    fn fetch_info(&mut self, info: &mut Info) -> HidResult<()> {
+        let mut rpt_desc: hidraw_report_descriptor = unsafe { mem::zeroed() };
+        let mut devinfo: hidraw_devinfo = unsafe { mem::zeroed() };
+        let mut rpt_desc_size: c_int = 0;
+        let mut buf = [0u8; 256];
+        let but_char_view = unsafe { mem::transmute(&mut buf[..]) };
+
+        let fd = self.file.as_raw_fd();
+
+        unsafe {
+            hidraw_ioc_getrdescsize(fd, &mut rpt_desc_size).convert()?;
+            rpt_desc.size = rpt_desc_size as u32;
+            hidraw_ioc_getrdesc(fd, &mut rpt_desc).convert()?;
+            hidraw_ioc_getrawname(fd, but_char_view).convert()?;
+        };
+        Ok(())
     }
 }
