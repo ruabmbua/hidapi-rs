@@ -4,14 +4,15 @@
 // This file is part of hidapi-rs, based on hidapi-rs by Osspial
 // **************************************************************************
 
+use cfg_if::cfg_if;
+use failure::{Compat, Error};
 #[cfg(any(
     feature = "linux-static-hidraw",
     feature = "linux-static-libusb",
     feature = "linux-shared-hidraw",
     feature = "linux-shared-libusb"
 ))]
-use crate::backend::libc::wchar_t;
-use failure::{Compat, Error};
+use libc::wchar_t;
 
 pub type HidResult<T> = Result<T, HidError>;
 
@@ -62,6 +63,10 @@ pub enum HidError {
     #[cfg(feature = "linux-rust-hidraw")]
     #[fail(display = "Udev error: {}", udev_e)]
     UdevError { udev_e: libudev::Error },
+
+    #[cfg(feature = "linux-rust-hidraw")]
+    #[fail(display = "Nix error: {}", nix_e)]
+    NixError { nix_e: nix::Error },
 }
 
 pub trait ResultExt<T> {
@@ -69,9 +74,17 @@ pub trait ResultExt<T> {
     fn convert(self) -> Result<T, HidError>;
 }
 
-#[cfg(feature = "linux-rust-hidraw")]
-impl<T> ResultExt<T> for Result<T, libudev::Error> {
-    fn convert(self) -> Result<T, HidError> {
-        self.map_err(|udev_e| HidError::UdevError { udev_e })
+cfg_if! {
+    if #[cfg(feature = "linux-rust-hidraw")] {
+        impl<T> ResultExt<T> for Result<T, libudev::Error> {
+            fn convert(self) -> Result<T, HidError> {
+                self.map_err(|udev_e| HidError::UdevError { udev_e })
+            }
+        }
+        impl<T> ResultExt<T> for Result<T, nix::Error> {
+            fn convert(self) -> Result<T, HidError> {
+                self.map_err(|nix_e| HidError::NixError { nix_e })
+            }
+        }
     }
 }

@@ -2,9 +2,10 @@ use crate::backend::{ApiBackend, ApiDevice, ApiDeviceInfo};
 use crate::error::{HidError, HidResult, ResultExt};
 use libudev::Context;
 use std::io::{self, Read, Write};
-mod udev_enumerator;
-
 use udev_enumerator::{Enumerator, DeviceInfo};
+
+mod udev_enumerator;
+mod hidraw;
 
 pub struct HidrawBackend {
     udev_ctx: Context,

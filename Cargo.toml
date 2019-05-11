@@ -18,14 +18,14 @@ edition = "2018"
 
 [features]
 default = ["linux-rust-hidraw"]
-linux-static-libusb = ["libc"]
-linux-static-hidraw = ["libc"]
-linux-shared-libusb = ["libc"]
-linux-shared-hidraw = ["libc"]
+linux-static-libusb = []
+linux-static-hidraw = []
+linux-shared-libusb = []
+linux-shared-hidraw = []
 linux-rust-hidraw = ["libudev", "nix"]
 
 [dependencies]
-libc = { version = "0.2.54", optional = true }
+libc = { version = "0.2.54" }
 failure = "0.1.5"
 failure_derive = "0.1.5"
 cfg-if = "0.1.7"

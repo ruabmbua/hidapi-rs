@@ -2,6 +2,7 @@
 use crate::backend::ApiDeviceInfo;
 use crate::error::{HidResult, ResultExt};
 use libudev::{Context, Enumerator as UdevEnumerator, Error as UdevError};
+
 pub struct Enumerator<'a> {
     udev_ctx: &'a Context,
     enumerator: UdevEnumerator<'a>,

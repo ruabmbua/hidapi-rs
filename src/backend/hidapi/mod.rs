@@ -4,8 +4,6 @@
 // This file is part of hidapi-rs, based on hidapi-rs by Osspial
 // **************************************************************************
 
-pub extern crate libc;
-
 mod ffi;
 
 use failure::Fail;
@@ -118,7 +116,7 @@ impl ApiDeviceInfo for HidapiDeviceInfo {
     }
 }
 
-use self::libc::{c_int, size_t, wchar_t};
+use libc::{c_int, size_t, wchar_t};
 use failure::Error;
 use std::ffi::CString;
 use std::mem::ManuallyDrop;
