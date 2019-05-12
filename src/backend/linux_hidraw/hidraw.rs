@@ -3,7 +3,7 @@
 use crate::error::{HidResult, ResultExt};
 use libc::{c_char, c_int, O_NONBLOCK, O_RDWR};
 use nix::errno::Errno;
-use std::ffi::{OsStr, OsString, CStr, CString};
+use std::ffi::{CStr, CString, OsStr, OsString};
 use std::fs::File;
 use std::mem;
 use std::os::unix::ffi::OsStrExt;
@@ -127,25 +127,20 @@ pub struct HidrawDevice {
 }
 
 #[derive(Default, Debug)]
-struct Info {
-    raw_descriptor: Vec<u8>,
-    vendor_id: u16,
-    product_id: u16,
-    bus_type: u32,
-    raw_name: OsString,
-    raw_phys: OsString,
+pub struct HidrawInfo {
+    pub raw_descriptor: Vec<u8>,
+    pub vendor_id: u16,
+    pub product_id: u16,
+    pub bus_type: u32,
+    pub raw_name: OsString,
+    pub raw_phys: OsString,
 }
 
 impl HidrawDevice {
     pub fn from_path<P: AsRef<Path>>(path: P) -> HidResult<Self> {
         let path = path.as_ref();
         let raw_path = CString::new(path.as_os_str().as_bytes()).convert()?;
-        let fd = unsafe {
-            libc::open(
-                raw_path.as_ptr(),
-                O_RDWR | O_NONBLOCK,
-            )
-        };
+        let fd = unsafe { libc::open(raw_path.as_ptr(), O_RDWR | O_NONBLOCK) };
         // Check errno
         let fd = Errno::result(fd).convert()?;
         let file = unsafe { File::from_raw_fd(fd) };
@@ -155,8 +150,8 @@ impl HidrawDevice {
 
     /// Fetches all the available info, which can be interpreted
     /// independently.
-    fn fetch_info(&self) -> HidResult<Info> {
-        let mut info = Info::default();
+    pub fn fetch_info(&self) -> HidResult<HidrawInfo> {
+        let mut info = HidrawInfo::default();
 
         let mut rpt_desc: hidraw_report_descriptor = unsafe { mem::zeroed() };
         let mut devinfo: hidraw_devinfo = unsafe { mem::zeroed() };
@@ -192,7 +187,6 @@ impl HidrawDevice {
         Ok(info)
     }
 }
-
 
 #[cfg(test)]
 mod test {

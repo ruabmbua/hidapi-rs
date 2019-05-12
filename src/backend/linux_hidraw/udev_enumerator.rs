@@ -1,4 +1,4 @@
-
+use super::hidraw::{HidrawDevice, HidrawInfo};
 use crate::backend::ApiDeviceInfo;
 use crate::error::{HidResult, ResultExt};
 use libudev::{Context, Enumerator as UdevEnumerator, Error as UdevError};
@@ -12,6 +12,7 @@ impl<'a> Enumerator<'a> {
     pub fn create(udev: &'a Context) -> HidResult<Self> {
         let mut enumerator = UdevEnumerator::new(udev).convert()?;
 
+        // Filter for hidraw subsystem devices.
         enumerator.match_subsystem("hidraw").convert()?;
 
         Ok(Self {
@@ -22,37 +23,50 @@ impl<'a> Enumerator<'a> {
 
     pub fn enumerate<'b>(&'b mut self) -> HidResult<(impl Iterator<Item = DeviceInfo> + 'b)> {
         let devices = self.enumerator.scan_devices().convert()?;
-        let device_info = devices.map(|d| DeviceInfo::from(d));
-        Ok(device_info)
+
+        // Fetch info from hidraw devices
+        let mut results = Vec::new();
+        for dev in devices {
+            let mut info = DeviceInfo::default();
+
+            if let Some(path) = dev.devnode() {
+                // Try to convert to UTF-8 string.
+                info.path = path.to_str().map(|s| s.to_owned());
+
+                // Open the hidraw device file
+                let hidraw_dev = HidrawDevice::from_path(path)?;
+
+                // Fetch hidraw info
+                info.hidraw_info = hidraw_dev.fetch_info()?;
+                
+                // Close the hidraw device fd
+                drop(hidraw_dev);
+            } else {
+                // Just skip it, we can not access it anyway
+                continue;
+            }
+        }
+
+        // let device_info = devices.map(|d| DeviceInfo::from(d));
+        Ok(results.into_iter())
     }
 }
 
+#[derive(Default, Debug)]
 pub struct DeviceInfo {
     path: Option<String>,
+    hidraw_info: HidrawInfo,
 }
-
-impl<'a> From<libudev::Device<'a>> for DeviceInfo {
-    fn from(dev: libudev::Device<'a>) -> Self {
-        Self {
-            path: dev
-                .devnode()
-                .iter()
-                .flat_map(|p| p.to_str().map(|s| s.to_owned()))
-                .next(),
-        }
-    }
-}
-
 
 impl ApiDeviceInfo for DeviceInfo {
     fn path(&self) -> Option<String> {
         self.path.clone()
     }
     fn vendor_id(&self) -> u16 {
-        unimplemented!()
+        self.hidraw_info.vendor_id
     }
     fn product_id(&self) -> u16 {
-        unimplemented!()
+        self.hidraw_info.product_id
     }
     fn serial_number(&self) -> Option<String> {
         unimplemented!()
@@ -89,29 +103,38 @@ impl<'a> std::fmt::Debug for UdevDevice<'a> {
         fmt.debug_list()
             .entries(self.0.attributes().map(|a| Attribute(a)))
             .entries(self.0.properties().map(|p| Property(p)))
-            .finish()  
+            .finish()
     }
 }
 impl<'a> std::fmt::Debug for Property<'a> {
     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(fmt, "Property {{name: {}, value: {}}}", 
-            self.0.name().to_string_lossy(), self.0.value().to_string_lossy())
+        write!(
+            fmt,
+            "Property {{name: {}, value: {}}}",
+            self.0.name().to_string_lossy(),
+            self.0.value().to_string_lossy()
+        )
     }
 }
 impl<'a> std::fmt::Debug for Attribute<'a> {
     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(fmt, "Attribute {{name: {}, value: {}}}", 
-            self.0.name().to_string_lossy(), 
-            self.0.value().map(|v| v.to_string_lossy()).
-            unwrap_or(std::borrow::Cow::Borrowed("undefined")))
+        write!(
+            fmt,
+            "Attribute {{name: {}, value: {}}}",
+            self.0.name().to_string_lossy(),
+            self.0
+                .value()
+                .map(|v| v.to_string_lossy())
+                .unwrap_or(std::borrow::Cow::Borrowed("undefined"))
+        )
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::Enumerator;
-    use libudev::Context;
     use crate::backend::ApiDeviceInfo;
+    use libudev::Context;
 
     #[test]
     fn test_enumeration() {
