@@ -1,11 +1,12 @@
 [package]
 name = "hidapi"
-version = "0.5.0"
+version = "0.5.2"
 authors = [
     "Roland Ruckerbauer <roland.rucky@gmail.com>",
     "Osspial <osspial@gmail.com>",
     "Artyom Pavlov <newpavlov@gmail.com>",
-	"mberndt123"
+	"mberndt123",
+	"niklasad1"
 ]
 repository = "https://github.com/Osspial/hidapi-rs"
 description = "Rust-y wrapper around hidapi"
