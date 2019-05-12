@@ -3,13 +3,19 @@
 use crate::error::{HidResult, ResultExt};
 use libc::{c_char, c_int, O_NONBLOCK, O_RDWR};
 use nix::errno::Errno;
+use std::ffi::{OsStr, OsString};
 use std::fs::File;
 use std::mem;
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::io::{AsRawFd, FromRawFd};
 use std::path::Path;
 
-// Taken from the Linux kernel source tree (include/uapi/linux/hidraw.h):
+// Taken from the Linux kernel source tree (include/uapi/linux/hidraw.h, input.h, hid.h):
+//
+// #define BUS_USB			0x03
+// #define BUS_HIL			0x04
+// #define BUS_BLUETOOTH	0x05
+// #define BUS_VIRTUAL		0x06
 //
 // #define HID_MAX_DESCRIPTOR_SIZE 4096
 //
@@ -38,6 +44,11 @@ use std::path::Path;
 // #define HIDRAW_MAX_DEVICES 64
 // /* number of reports to buffer */
 // #define HIDRAW_BUFFER_SIZE 64
+
+const BUS_USB: u8 = 0x03;
+const BUS_HIL: u8 = 0x04;
+const BUS_BLUETOOTH: u8 = 0x05;
+const BUS_VIRTUAL: u8 = 0x06;
 
 const HID_MAX_DESCRIPTOR_SIZE: usize = 4096;
 const HIDRAW_IOC_MAGIC: u8 = b'H';
@@ -115,8 +126,14 @@ pub struct HidrawDevice {
     file: File,
 }
 
+#[derive(Default)]
 struct Info {
-    
+    raw_descriptor: Vec<u8>,
+    vendor_id: u16,
+    product_id: u16,
+    bus_type: u32,
+    raw_name: OsString,
+    raw_phys: OsString,
 }
 
 impl HidrawDevice {
@@ -136,21 +153,38 @@ impl HidrawDevice {
 
     /// Fetches all the available info, which can be interpreted
     /// independently.
-    fn fetch_info(&mut self, info: &mut Info) -> HidResult<()> {
+    fn fetch_info(&self) -> HidResult<Info> {
+        let mut info = Info::default();
+
         let mut rpt_desc: hidraw_report_descriptor = unsafe { mem::zeroed() };
         let mut devinfo: hidraw_devinfo = unsafe { mem::zeroed() };
         let mut rpt_desc_size: c_int = 0;
         let mut buf = [0u8; 256];
-        let but_char_view = unsafe { mem::transmute(&mut buf[..]) };
+        let buf_char_view = unsafe { mem::transmute::<_, &mut [i8]>(&mut buf[..]) };
 
         let fd = self.file.as_raw_fd();
 
         unsafe {
+            // Get raw descriptor
             hidraw_ioc_getrdescsize(fd, &mut rpt_desc_size).convert()?;
             rpt_desc.size = rpt_desc_size as u32;
             hidraw_ioc_getrdesc(fd, &mut rpt_desc).convert()?;
-            hidraw_ioc_getrawname(fd, but_char_view).convert()?;
+            info.raw_descriptor = Vec::from(&rpt_desc.value[..rpt_desc.size as usize]);
+
+            // Get devinfo
+            hidraw_ioc_getrawinfo(fd, &mut devinfo).convert()?;
+            info.vendor_id = devinfo.vendor as u16;
+            info.product_id = devinfo.product as u16;
+            info.bus_type = devinfo.bustype;
+
+            // Get raw name
+            hidraw_ioc_getrawname(fd, buf_char_view).convert()?;
+            info.raw_name = OsStr::from_bytes(&buf[..]).to_os_string();
+
+            // Get raw PHY
+            hidraw_ioc_getrawphys(fd, buf_char_view).convert()?;
+            info.raw_phys = OsStr::from_bytes(&buf[..]).to_os_string();
         };
-        Ok(())
+        Ok(info)
     }
 }
