@@ -67,6 +67,14 @@ pub enum HidError {
     #[cfg(feature = "linux-rust-hidraw")]
     #[fail(display = "Nix error: {}", nix_e)]
     NixError { nix_e: nix::Error },
+
+    #[cfg(feature = "linux-rust-hidraw")]
+    #[fail(display = "NulError: {}", nul_e)]
+    NulError { nul_e: std::ffi::NulError },
+
+    #[cfg(feature = "linux-rust-hidraw")]
+    #[fail(display = "FromBytesWithNulError: {}", nul_e)]
+    FromBytesWithNulError { nul_e: std::ffi::FromBytesWithNulError },
 }
 
 pub trait ResultExt<T> {
@@ -84,6 +92,16 @@ cfg_if! {
         impl<T> ResultExt<T> for Result<T, nix::Error> {
             fn convert(self) -> Result<T, HidError> {
                 self.map_err(|nix_e| HidError::NixError { nix_e })
+            }
+        }
+        impl<T> ResultExt<T> for Result<T, std::ffi::NulError> {
+            fn convert(self) -> Result<T, HidError> {
+                self.map_err(|nul_e| HidError::NulError { nul_e })
+            }
+        }
+        impl<T> ResultExt<T> for Result<T, std::ffi::FromBytesWithNulError> {
+            fn convert(self) -> Result<T, HidError> {
+                self.map_err(|nul_e| HidError::FromBytesWithNulError { nul_e })
             }
         }
     }

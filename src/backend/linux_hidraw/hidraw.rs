@@ -3,7 +3,7 @@
 use crate::error::{HidResult, ResultExt};
 use libc::{c_char, c_int, O_NONBLOCK, O_RDWR};
 use nix::errno::Errno;
-use std::ffi::{OsStr, OsString};
+use std::ffi::{OsStr, OsString, CStr, CString};
 use std::fs::File;
 use std::mem;
 use std::os::unix::ffi::OsStrExt;
@@ -126,7 +126,7 @@ pub struct HidrawDevice {
     file: File,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct Info {
     raw_descriptor: Vec<u8>,
     vendor_id: u16,
@@ -137,10 +137,12 @@ struct Info {
 }
 
 impl HidrawDevice {
-    pub fn from_path(path: &Path) -> HidResult<Self> {
+    pub fn from_path<P: AsRef<Path>>(path: P) -> HidResult<Self> {
+        let path = path.as_ref();
+        let raw_path = CString::new(path.as_os_str().as_bytes()).convert()?;
         let fd = unsafe {
             libc::open(
-                path.as_os_str().as_bytes().as_ptr() as *const i8,
+                raw_path.as_ptr(),
                 O_RDWR | O_NONBLOCK,
             )
         };
@@ -179,12 +181,26 @@ impl HidrawDevice {
 
             // Get raw name
             hidraw_ioc_getrawname(fd, buf_char_view).convert()?;
-            info.raw_name = OsStr::from_bytes(&buf[..]).to_os_string();
+            let cstr = CStr::from_ptr(buf_char_view.as_ptr());
+            info.raw_name = OsStr::from_bytes(cstr.to_bytes()).to_os_string();
 
             // Get raw PHY
             hidraw_ioc_getrawphys(fd, buf_char_view).convert()?;
-            info.raw_phys = OsStr::from_bytes(&buf[..]).to_os_string();
+            let cstr = CStr::from_ptr(buf_char_view.as_ptr());
+            info.raw_phys = OsStr::from_bytes(cstr.to_bytes()).to_os_string();
         };
         Ok(info)
+    }
+}
+
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_fetch_info() {
+        let dev = HidrawDevice::from_path("/dev/hidraw1").unwrap();
+        println!("{:?}", dev.fetch_info().unwrap());
     }
 }
