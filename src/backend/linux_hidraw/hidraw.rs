@@ -1,3 +1,9 @@
+// **************************************************************************
+// Copyright (c) 2019 Roland Ruckerbauer All Rights Reserved.
+//
+// This file is part of hidapi-rs
+// **************************************************************************
+
 //! Linux hidraw syscall interface abstraction
 
 use crate::error::{HidResult, ResultExt};

@@ -1,3 +1,9 @@
+// **************************************************************************
+// Copyright (c) 2019 Roland Ruckerbauer All Rights Reserved.
+//
+// This file is part of hidapi-rs
+// **************************************************************************
+
 use crate::backend::{ApiBackend, ApiDevice, ApiDeviceInfo};
 use crate::error::{HidError, HidResult, ResultExt};
 use libudev::Context;

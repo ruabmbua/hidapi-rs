@@ -1,7 +1,7 @@
 // **************************************************************************
-// Copyright (c) 2018 Roland Ruckerbauer All Rights Reserved.
+// Copyright (c) 2019 Roland Ruckerbauer All Rights Reserved.
 //
-// This file is part of hidapi-rs, based on hidapi-rs by Osspial
+// This file is part of hidapi-rs
 // **************************************************************************
 
 use cfg_if::cfg_if;
@@ -74,7 +74,9 @@ pub enum HidError {
 
     #[cfg(feature = "linux-rust-hidraw")]
     #[fail(display = "FromBytesWithNulError: {}", nul_e)]
-    FromBytesWithNulError { nul_e: std::ffi::FromBytesWithNulError },
+    FromBytesWithNulError {
+        nul_e: std::ffi::FromBytesWithNulError,
+    },
 }
 
 pub trait ResultExt<T> {

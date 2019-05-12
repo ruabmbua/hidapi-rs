@@ -1,8 +1,8 @@
 // **************************************************************************
-// Copyright (c) 2015 Osspial All Rights Reserved.
+// Copyright (c) 2019 Roland Ruckerbauer All Rights Reserved.
 //
-// This file is part of hidapi-rs, based on hidapi_rust by Roland Ruckerbauer.
-// *************************************************************************
+// This file is part of hidapi-rs
+// **************************************************************************
 
 //! This crate provides a rust abstraction over the features of the C library
 //! hidapi by [signal11](https://github.com/signal11/hidapi).
