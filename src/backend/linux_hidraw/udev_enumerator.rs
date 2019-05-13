@@ -44,7 +44,7 @@ impl<'a> Enumerator<'a> {
 
                 // Fetch hidraw info
                 info.hidraw_info = hidraw_dev.fetch_info()?;
-                
+
                 // Close the hidraw device fd
                 drop(hidraw_dev);
             } else {
