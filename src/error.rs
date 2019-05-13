@@ -77,6 +77,14 @@ pub enum HidError {
     FromBytesWithNulError {
         nul_e: std::ffi::FromBytesWithNulError,
     },
+
+    #[cfg(feature = "linux-rust-hidraw")]
+    #[fail(display = "Utf8Error: {}", utf8_e)]
+    Utf8Error { utf8_e: std::str::Utf8Error },
+
+    #[cfg(feature = "linux-rust-hidraw")]
+    #[fail(display = "ParseIntError: {}", parse_e)]
+    ParseIntError { parse_e: std::num::ParseIntError },
 }
 
 pub trait ResultExt<T> {
@@ -104,6 +112,16 @@ cfg_if! {
         impl<T> ResultExt<T> for Result<T, std::ffi::FromBytesWithNulError> {
             fn convert(self) -> Result<T, HidError> {
                 self.map_err(|nul_e| HidError::FromBytesWithNulError { nul_e })
+            }
+        }
+        impl<T> ResultExt<T> for Result<T, std::str::Utf8Error> {
+            fn convert(self) -> Result<T, HidError> {
+                self.map_err(|utf8_e| HidError::Utf8Error { utf8_e })
+            }
+        }
+        impl<T> ResultExt<T> for Result<T, std::num::ParseIntError> {
+            fn convert(self) -> Result<T, HidError> {
+                self.map_err(|parse_e| HidError::ParseIntError { parse_e })
             }
         }
     }

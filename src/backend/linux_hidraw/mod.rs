@@ -12,6 +12,7 @@ use udev_enumerator::{Enumerator, DeviceInfo};
 
 mod udev_enumerator;
 mod hidraw;
+mod kbug;
 
 pub struct HidrawBackend {
     udev_ctx: Context,
