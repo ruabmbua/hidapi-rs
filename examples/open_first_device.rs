@@ -7,14 +7,12 @@
 //! Opens the first hid device it can find, and reads data in a blocking fashion
 //! from it in an endless loop.
 
-extern crate failure;
 extern crate hidapi;
 
-use failure::Error;
-use hidapi::HidApi;
+use hidapi::{HidApi, HidError};
 
 fn main() {
-    fn run() -> Result<(), Error> {
+    fn run() -> Result<(), HidError> {
         let hidapi = HidApi::new()?;
 
         let device_info = hidapi
@@ -36,8 +34,6 @@ fn main() {
             let len = device.read(&mut buf)?;
             println!("{:?}", &buf[..len]);
         }
-
-        Ok(())
     }
 
     if let Err(e) = run() {

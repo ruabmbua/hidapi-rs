@@ -35,15 +35,11 @@
 //! }
 //! ```
 
-#[macro_use]
-extern crate failure_derive;
-extern crate failure;
 extern crate libc;
 
 mod error;
 mod ffi;
 
-use failure::Error;
 use libc::{c_int, size_t, wchar_t};
 use std::ffi::CStr;
 use std::ffi::CString;
@@ -65,10 +61,9 @@ impl HidApiLock {
     fn acquire() -> HidResult<HidApiLock> {
         const EXPECTED_CURRENT: bool = false;
 
-        if EXPECTED_CURRENT == HID_API_LOCK.compare_and_swap(EXPECTED_CURRENT,
-                                                             true,
-                                                             Ordering::SeqCst) {
-
+        if EXPECTED_CURRENT
+            == HID_API_LOCK.compare_and_swap(EXPECTED_CURRENT, true, Ordering::SeqCst)
+        {
             // Initialize the HID and prevent other HIDs from being created
             unsafe {
                 if ffi::hid_init() == -1 {
@@ -85,7 +80,9 @@ impl HidApiLock {
 
 impl Drop for HidApiLock {
     fn drop(&mut self) {
-        unsafe { ffi::hid_exit(); }
+        unsafe {
+            ffi::hid_exit();
+        }
         HID_API_LOCK.store(false, Ordering::SeqCst);
     }
 }
@@ -316,9 +313,8 @@ impl HidDevice {
         Ok(HidError::HidApiError {
             message: unsafe {
                 wchar_to_string(ffi::hid_error(self._hid_device))
-                    .map_err(|e| HidError::HidApiErrorEmptyWithCause {
-                        cause: Error::from(e).compat(),
-                    })?.ok_or(HidError::HidApiErrorEmpty)?
+                    .map_err(|e| HidError::HidApiErrorEmptyWithCause { cause: Box::new(e) })?
+                    .ok_or(HidError::HidApiErrorEmpty)?
             },
         })
     }

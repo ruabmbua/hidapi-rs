@@ -5,39 +5,62 @@
 // **************************************************************************
 
 use super::HidDeviceInfo;
-use failure::{Compat, Error};
 use libc::wchar_t;
+use std::error::Error;
+use std::fmt::{Display, Formatter, Result};
 
-#[derive(Debug, Fail)]
+#[derive(Debug)]
 pub enum HidError {
-    #[fail(display = "hidapi error: {}", message)]
     HidApiError { message: String },
-    #[fail(
-        display = "hidapi error: (could not get error message), caused by: {}",
-        cause
-    )]
-    HidApiErrorEmptyWithCause {
-        #[cause]
-        cause: Compat<Error>,
-    },
-    #[fail(display = "hidapi error: (could not get error message)")]
+    HidApiErrorEmptyWithCause { cause: Box<Error + Send + Sync> },
     HidApiErrorEmpty,
-    #[fail(display = "failed converting {:#X} to rust char", wide_char)]
     FromWideCharError { wide_char: wchar_t },
-    #[fail(display = "Failed to initialize hidapi (maybe initialized before?)")]
     InitializationError,
-    #[fail(display = "Failed opening hid device")]
     OpenHidDeviceError,
-    #[fail(display = "Invalid data: size can not be 0")]
     InvalidZeroSizeData,
-    #[fail(
-        display = "Failed to send all data: only sent {} out of {} bytes",
-        sent,
-        all
-    )]
     IncompleteSendError { sent: usize, all: usize },
-    #[fail(display = "Can not set blocking mode to '{}'", mode)]
     SetBlockingModeError { mode: &'static str },
-    #[fail(display = "Can not open hid device with: {:?}", device_info)]
     OpenHidDeviceWithDeviceInfoError { device_info: HidDeviceInfo },
+}
+
+impl Display for HidError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        match self {
+            HidError::HidApiError { message } => write!(f, "hidapi error: {}", message),
+            HidError::HidApiErrorEmptyWithCause { cause } => write!(
+                f,
+                "hidapi error: (could not get error message), caused by: {}",
+                cause
+            ),
+            HidError::HidApiErrorEmpty => write!(f, "hidapi error: (could not get error message)"),
+            HidError::FromWideCharError { wide_char } => {
+                write!(f, "failed converting {:#X} to rust char", wide_char)
+            }
+            HidError::InitializationError => {
+                write!(f, "Failed to initialize hidapi (maybe initialized before?)")
+            }
+            HidError::OpenHidDeviceError => write!(f, "Failed opening hid device"),
+            HidError::InvalidZeroSizeData => write!(f, "Invalid data: size can not be 0"),
+            HidError::IncompleteSendError { sent, all } => write!(
+                f,
+                "Failed to send all data: only sent {} out of {} bytes",
+                sent, all
+            ),
+            HidError::SetBlockingModeError { mode } => {
+                write!(f, "Can not set blocking mode to '{}'", mode)
+            }
+            HidError::OpenHidDeviceWithDeviceInfoError { device_info } => {
+                write!(f, "Can not open hid device with: {:?}", device_info)
+            }
+        }
+    }
+}
+
+impl Error for HidError {
+    fn source(&self) -> Option<&(Error + 'static)> {
+        match self {
+            HidError::HidApiErrorEmptyWithCause { cause } => Some(cause.as_ref()),
+            _ => None,
+        }
+    }
 }
