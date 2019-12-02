@@ -31,6 +31,8 @@ fn main() {
         compile_windows();
     } else if target.contains("darwin") {
         compile_macos();
+    } else if target.contains("freebsd") {
+        compile_freebsd();
     } else {
         panic!("Unsupported target os for hidapi-rs");
     }
@@ -105,6 +107,10 @@ fn compile_linux() {
 //fn compile_linux() {
 //
 //}
+
+fn compile_freebsd() {
+    pkg_config::probe_library("hidapi").expect("Unable to find hidapi");
+}
 
 fn compile_windows() {
     cc::Build::new()
