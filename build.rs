@@ -42,7 +42,13 @@ fn compile_linux() {
     // First check the features enabled for the crate.
     // Only one linux backend should be enabled at a time.
 
-    let avail_backends: [(&'static str, Box<dyn Fn()>); 4] = [
+    let avail_backends: Vec<(&'static str, Box<dyn Fn()>)> = vec![
+        (
+            "LINUX_RUST_HIDRAW",
+            Box::new(|| {
+                // Nothing to do here. libudev will be handled by libudev crate.
+            }),
+        ),
         (
             "LINUX_STATIC_HIDRAW",
             Box::new(|| {
@@ -91,22 +97,12 @@ fn compile_linux() {
         .filter(|f| env::var(format!("CARGO_FEATURE_{}", f.0)).is_ok());
 
     if backends.clone().count() != 1 {
-        panic!("Exactly one linux hidapi backend must be selected.");
+        panic!("Exactly one linux backend must be selected.");
     }
 
     // Build it!
     (backends.next().unwrap().1)();
 }
-
-//#[cfg(all(feature = "shared-libusb", not(feature = "shared-hidraw")))]
-//fn compile_linux() {
-//
-//}
-//
-//#[cfg(all(feature = "shared-hidraw"))]
-//fn compile_linux() {
-//
-//}
 
 fn compile_freebsd() {
     pkg_config::probe_library("hidapi").expect("Unable to find hidapi");
