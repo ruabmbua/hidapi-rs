@@ -193,9 +193,10 @@ impl HidApi {
 }
 
 /// Converts a pointer to a `wchar_t` to a optional string
-unsafe fn wchar_to_string(wstr: *const wchar_t) -> HidResult<Option<String>> {
+/// If the conversion fails, it will also return None
+unsafe fn wchar_to_string(wstr: *const wchar_t) -> Option<String> {
     if wstr.is_null() {
-        return Ok(None);
+        return None;
     }
 
     let mut char_vector: Vec<char> = Vec::with_capacity(8);
@@ -205,17 +206,16 @@ unsafe fn wchar_to_string(wstr: *const wchar_t) -> HidResult<Option<String>> {
 
     while o(index) != 0 {
         use std::char;
+
         char_vector.push(match char::from_u32(o(index) as u32) {
             Some(ch) => ch,
-            None => Err(HidError::FromWideCharError {
-                wide_char: o(index),
-            })?,
+            None => return None,
         });
 
         index += 1;
     }
 
-    Ok(Some(char_vector.into_iter().collect()))
+    Some(char_vector.into_iter().collect())
 }
 
 /// Convert the CFFI `HidDeviceInfo` struct to a native `HidDeviceInfo` struct
@@ -224,10 +224,10 @@ unsafe fn conv_hid_device_info(src: *mut ffi::HidDeviceInfo) -> HidResult<HidDev
         path: CStr::from_ptr((*src).path).to_owned(),
         vendor_id: (*src).vendor_id,
         product_id: (*src).product_id,
-        serial_number: wchar_to_string((*src).serial_number)?,
+        serial_number: wchar_to_string((*src).serial_number),
         release_number: (*src).release_number,
-        manufacturer_string: wchar_to_string((*src).manufacturer_string)?,
-        product_string: wchar_to_string((*src).product_string)?,
+        manufacturer_string: wchar_to_string((*src).manufacturer_string),
+        product_string: wchar_to_string((*src).product_string),
         usage_page: (*src).usage_page,
         usage: (*src).usage,
         interface_number: (*src).interface_number,
@@ -315,7 +315,6 @@ impl HidDevice {
         Ok(HidError::HidApiError {
             message: unsafe {
                 wchar_to_string(ffi::hid_error(self._hid_device))
-                    .map_err(|e| HidError::HidApiErrorEmptyWithCause { cause: Box::new(e) })?
                     .ok_or(HidError::HidApiErrorEmpty)?
             },
         })
@@ -436,7 +435,7 @@ impl HidDevice {
             )
         };
         let res = self.check_size(res)?;
-        unsafe { wchar_to_string(buf[..res].as_ptr()) }
+        unsafe { Ok(wchar_to_string(buf[..res].as_ptr())) }
     }
 
     /// Get The Manufacturer String from a HID device.
@@ -450,7 +449,7 @@ impl HidDevice {
             )
         };
         let res = self.check_size(res)?;
-        unsafe { wchar_to_string(buf[..res].as_ptr()) }
+        unsafe { Ok(wchar_to_string(buf[..res].as_ptr())) }
     }
 
     /// Get The Serial Number String from a HID device.
@@ -464,7 +463,7 @@ impl HidDevice {
             )
         };
         let res = self.check_size(res)?;
-        unsafe { wchar_to_string(buf[..res].as_ptr()) }
+        unsafe { Ok(wchar_to_string(buf[..res].as_ptr())) }
     }
 
     /// Get a string from a HID device, based on its string index.
@@ -479,6 +478,6 @@ impl HidDevice {
             )
         };
         let res = self.check_size(res)?;
-        unsafe { wchar_to_string(buf[..res].as_ptr()) }
+        unsafe { Ok(wchar_to_string(buf[..res].as_ptr())) }
     }
 }
