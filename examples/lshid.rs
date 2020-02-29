@@ -17,10 +17,14 @@ fn main() {
         Ok(api) => {
             for device in api.device_list() {
                 println!(
-                    "VID: {:04x}, PID: {:04x}, Serial: {}",
+                    "VID: {:04x}, PID: {:04x}, Serial: {}, Product name: {}",
                     device.vendor_id(),
                     device.product_id(),
                     match device.serial_number() {
+                        Some(s) => s,
+                        _ => "<COULD NOT FETCH>",
+                    },
+                    match device.product_string() {
                         Some(s) => s,
                         _ => "<COULD NOT FETCH>",
                     }
