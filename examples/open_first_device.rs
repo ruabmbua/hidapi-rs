@@ -16,13 +16,12 @@ fn main() {
         let hidapi = HidApi::new()?;
 
         let device_info = hidapi
-            .devices()
-            .iter()
+            .device_list()
             .next()
             .expect("No devices are available!")
             .clone();
 
-        println!("Opening device:\n {:#?}\n", device_info);
+        println!("Opening device:\n VID: {:04x}, PID: {:04x}\n", device_info.vendor_id(), device_info.product_id());
 
         let device = device_info.open_device(&hidapi)?;
 

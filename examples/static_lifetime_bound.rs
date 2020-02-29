@@ -23,16 +23,14 @@ fn requires_static_lt_bound<F: Fn() + 'static>(f: F) {
 fn test_lt() -> Rc<HidDevice> {
     let api = HidApi::new().expect("Hidapi init failed");
 
-    let devices = api.devices();
+    let mut devices = api.device_list();
 
     let dev_info = devices
-        .get(0)
+        .nth(0)
         .expect("There is not a single hid device available");
 
-    println!("{:#?}", dev_info);
-
     let dev = Rc::new(
-        api.open(dev_info.vendor_id, dev_info.product_id)
+        api.open(dev_info.vendor_id(), dev_info.product_id())
             .expect("Can not open device"),
     );
 

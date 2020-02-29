@@ -15,8 +15,16 @@ fn main() {
 
     match HidApi::new() {
         Ok(api) => {
-            for device in api.devices() {
-                println!("{:#?}", device);
+            for device in api.device_list() {
+                println!(
+                    "VID: {:04x}, PID: {:04x}, Serial: {}",
+                    device.vendor_id(),
+                    device.product_id(),
+                    match device.serial_number() {
+                        Some(s) => s,
+                        _ => "<COULD NOT FETCH>",
+                    }
+                );
             }
         }
         Err(e) => {

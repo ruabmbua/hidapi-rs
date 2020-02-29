@@ -145,7 +145,7 @@ impl HidApi {
         Ok(device_vector)
     }
 
-    /// Returns list of objects containing information about connected devices
+    /// Returns vec of objects containing information about connected devices
     ///
     /// Deprecated. Use `HidApi::device_list()` instead.
     #[deprecated]
@@ -153,8 +153,9 @@ impl HidApi {
         &self.devices
     }
 
+    /// Returns iterator containing information about attached HID devices.
     pub fn device_list(&self) -> impl Iterator<Item = &DeviceInfo> {
-        None.iter()
+        self.device_list.iter()
     }
 
     /// Open a HID device using a Vendor ID (VID) and Product ID (PID).
@@ -378,6 +379,27 @@ impl DeviceInfo {
     }
     pub fn interface_number(&self) -> i32 {
         self.interface_number
+    }
+
+    /// Use the information contained in `DeviceInfo` to open
+    /// and return a handle to a [HidDevice](struct.HidDevice.html).
+    ///
+    /// By default the device path is used to open the device.
+    /// When no path is available, then vid, pid and serial number are used.
+    /// If both path and serial number are not available, then this function will
+    /// fail with [HidError::OpenHidDeviceWithDeviceInfoError](enum.HidError.html#variant.OpenHidDeviceWithDeviceInfoError).
+    ///
+    /// Note, that opening a device could still be done using [HidApi::open()](struct.HidApi.html#method.open) directly.
+    pub fn open_device(&self, hidapi: &HidApi) -> HidResult<HidDevice> {
+        if self.path.as_bytes().len() != 0 {
+            hidapi.open_path(self.path.as_c_str())
+        } else if let Some(ref sn) = self.serial_number() {
+            hidapi.open_serial(self.vendor_id, self.product_id, sn)
+        } else {
+            Err(HidError::OpenHidDeviceWithDeviceInfoError {
+                device_info: Box::new(self.clone().into()),
+            })
+        }
     }
 }
 
