@@ -35,6 +35,9 @@
 //! }
 //! ```
 
+// Allow use of deprecated items, we defined ourselfes...
+#![allow(deprecated)]
+
 extern crate libc;
 
 mod error;
@@ -90,7 +93,8 @@ impl Drop for HidApiLock {
 /// Object for handling hidapi context and implementing RAII for it.
 /// Only one instance can exist at a time.
 pub struct HidApi {
-    devices: Vec<HidDeviceInfo>,
+    devices: Vec<HidDeviceInfo>, /* Deprecated */
+    device_list: Vec<DeviceInfo>,
     _lock: Arc<HidApiLock>,
 }
 
@@ -103,20 +107,25 @@ impl HidApi {
     pub fn new() -> HidResult<Self> {
         let lock = HidApiLock::acquire()?;
 
+        let device_list = unsafe { HidApi::get_hid_device_info_vector()? };
+
         Ok(HidApi {
-            devices: unsafe { HidApi::get_hid_device_info_vector()? },
+            device_list: device_list.clone(),
+            devices: device_list.into_iter().map(|d| d.into()).collect(),
             _lock: Arc::new(lock),
         })
     }
 
     /// Refresh devices list and information about them (to access them use
-    /// `devices()` method)
+    /// `device_list()` method)
     pub fn refresh_devices(&mut self) -> HidResult<()> {
-        self.devices = unsafe { HidApi::get_hid_device_info_vector()? };
+        let device_list = unsafe { HidApi::get_hid_device_info_vector()? };
+        self.device_list = device_list.clone();
+        self.devices = device_list.into_iter().map(|d| d.into()).collect();
         Ok(())
     }
 
-    unsafe fn get_hid_device_info_vector() -> HidResult<Vec<HidDeviceInfo>> {
+    unsafe fn get_hid_device_info_vector() -> HidResult<Vec<DeviceInfo>> {
         let mut device_vector = Vec::with_capacity(8);
 
         let enumeration = ffi::hid_enumerate(0, 0);
@@ -137,8 +146,15 @@ impl HidApi {
     }
 
     /// Returns list of objects containing information about connected devices
+    ///
+    /// Deprecated. Use `HidApi::device_list()` instead.
+    #[deprecated]
     pub fn devices(&self) -> &Vec<HidDeviceInfo> {
         &self.devices
+    }
+
+    pub fn device_list(&self) -> impl Iterator<Item = &DeviceInfo> {
+        None.iter()
     }
 
     /// Open a HID device using a Vendor ID (VID) and Product ID (PID).
@@ -192,35 +208,45 @@ impl HidApi {
     }
 }
 
-/// Converts a pointer to a `wchar_t` to a optional string
-/// If the conversion fails, it will also return None
-unsafe fn wchar_to_string(wstr: *const wchar_t) -> Option<String> {
+/// Converts a pointer to a `*const wchar_t` to a WcharString.
+unsafe fn wchar_to_string(wstr: *const wchar_t) -> WcharString {
     if wstr.is_null() {
-        return None;
+        return WcharString::None;
     }
 
     let mut char_vector: Vec<char> = Vec::with_capacity(8);
+    let mut raw_vector: Vec<wchar_t> = Vec::with_capacity(8);
     let mut index: isize = 0;
+    let mut invalid_char = false;
 
     let o = |i| *wstr.offset(i);
 
     while o(index) != 0 {
         use std::char;
 
-        char_vector.push(match char::from_u32(o(index) as u32) {
-            Some(ch) => ch,
-            None => return None,
-        });
+        raw_vector.push(*wstr.offset(index));
+
+        if !invalid_char {
+            if let Some(c) = char::from_u32(o(index) as u32) {
+                char_vector.push(c);
+            } else {
+                invalid_char = true;
+            }
+        }
 
         index += 1;
     }
 
-    Some(char_vector.into_iter().collect())
+    if !invalid_char {
+        WcharString::String(char_vector.into_iter().collect())
+    } else {
+        WcharString::Raw(raw_vector)
+    }
 }
 
 /// Convert the CFFI `HidDeviceInfo` struct to a native `HidDeviceInfo` struct
-unsafe fn conv_hid_device_info(src: *mut ffi::HidDeviceInfo) -> HidResult<HidDeviceInfo> {
-    Ok(HidDeviceInfo {
+unsafe fn conv_hid_device_info(src: *mut ffi::HidDeviceInfo) -> HidResult<DeviceInfo> {
+    Ok(DeviceInfo {
         path: CStr::from_ptr((*src).path).to_owned(),
         vendor_id: (*src).vendor_id,
         product_id: (*src).product_id,
@@ -234,8 +260,27 @@ unsafe fn conv_hid_device_info(src: *mut ffi::HidDeviceInfo) -> HidResult<HidDev
     })
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
+enum WcharString {
+    String(String),
+    Raw(Vec<wchar_t>),
+    None,
+}
+
+impl Into<Option<String>> for WcharString {
+    fn into(self) -> Option<String> {
+        match self {
+            WcharString::String(s) => Some(s),
+            _ => None,
+        }
+    }
+}
+
 /// Storage for device related information
+///
+/// Deprecated. Use `HidApi::device_list()` instead.
+#[derive(Debug, Clone)]
+#[deprecated]
 pub struct HidDeviceInfo {
     pub path: CString,
     pub vendor_id: u16,
@@ -247,6 +292,119 @@ pub struct HidDeviceInfo {
     pub usage_page: u16,
     pub usage: u16,
     pub interface_number: i32,
+}
+
+/// Device information. Use accessors to extract information about Hid devices.
+///
+/// Note: Methods like `serial_number()` may return None, if the conversion to a
+/// String failed internally. You can however access the raw hid representation of the
+/// string by calling `serial_number_raw()`
+#[derive(Clone)]
+pub struct DeviceInfo {
+    path: CString,
+    vendor_id: u16,
+    product_id: u16,
+    serial_number: WcharString,
+    release_number: u16,
+    manufacturer_string: WcharString,
+    product_string: WcharString,
+    usage_page: u16,
+    usage: u16,
+    interface_number: i32,
+}
+
+impl DeviceInfo {
+    pub fn path(&self) -> &CStr {
+        &self.path
+    }
+    pub fn vendor_id(&self) -> u16 {
+        self.vendor_id
+    }
+    pub fn product_id(&self) -> u16 {
+        self.product_id
+    }
+
+    /// Try to call `serial_number_raw()`, if None is returned.
+    pub fn serial_number(&self) -> Option<&str> {
+        match self.serial_number {
+            WcharString::String(ref s) => Some(s),
+            _ => None,
+        }
+    }
+    pub fn serial_number_raw(&self) -> Option<&[wchar_t]> {
+        match self.serial_number {
+            WcharString::Raw(ref s) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub fn release_number(&self) -> u16 {
+        self.release_number
+    }
+
+    /// Try to call `manufacturer_string_raw()`, if None is returned.
+    pub fn manufacturer_string(&self) -> Option<&str> {
+        match self.manufacturer_string {
+            WcharString::String(ref s) => Some(s),
+            _ => None,
+        }
+    }
+    pub fn manufacturer_string_raw(&self) -> Option<&[wchar_t]> {
+        match self.manufacturer_string {
+            WcharString::Raw(ref s) => Some(s),
+            _ => None,
+        }
+    }
+
+    /// Try to call `product_string_raw()`, if None is returned.
+    pub fn product_string(&self) -> Option<&str> {
+        match self.product_string {
+            WcharString::String(ref s) => Some(s),
+            _ => None,
+        }
+    }
+    pub fn product_string_raw(&self) -> Option<&[wchar_t]> {
+        match self.product_string {
+            WcharString::Raw(ref s) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub fn usage_page(&self) -> u16 {
+        self.usage_page
+    }
+    pub fn usage(&self) -> u16 {
+        self.usage
+    }
+    pub fn interface_number(&self) -> i32 {
+        self.interface_number
+    }
+}
+
+impl Into<HidDeviceInfo> for DeviceInfo {
+    fn into(self) -> HidDeviceInfo {
+        HidDeviceInfo {
+            path: self.path,
+            vendor_id: self.vendor_id,
+            product_id: self.product_id,
+            serial_number: match self.serial_number {
+                WcharString::String(s) => Some(s),
+                _ => None,
+            },
+            release_number: self.release_number,
+            manufacturer_string: match self.manufacturer_string {
+                WcharString::String(s) => Some(s),
+                _ => None,
+            },
+            product_string: match self.product_string {
+                WcharString::String(s) => Some(s),
+                _ => None,
+            },
+            usage_page: self.usage_page,
+            usage: self.usage,
+            interface_number: self.interface_number,
+        }
+    }
 }
 
 impl HidDeviceInfo {
@@ -314,8 +472,10 @@ impl HidDevice {
     pub fn check_error(&self) -> HidResult<HidError> {
         Ok(HidError::HidApiError {
             message: unsafe {
-                wchar_to_string(ffi::hid_error(self._hid_device))
-                    .ok_or(HidError::HidApiErrorEmpty)?
+                match wchar_to_string(ffi::hid_error(self._hid_device)) {
+                    WcharString::String(s) => s,
+                    _ => return Err(HidError::HidApiErrorEmpty),
+                }
             },
         })
     }
@@ -435,7 +595,7 @@ impl HidDevice {
             )
         };
         let res = self.check_size(res)?;
-        unsafe { Ok(wchar_to_string(buf[..res].as_ptr())) }
+        unsafe { Ok(wchar_to_string(buf[..res].as_ptr()).into()) }
     }
 
     /// Get The Manufacturer String from a HID device.
@@ -449,7 +609,7 @@ impl HidDevice {
             )
         };
         let res = self.check_size(res)?;
-        unsafe { Ok(wchar_to_string(buf[..res].as_ptr())) }
+        unsafe { Ok(wchar_to_string(buf[..res].as_ptr()).into()) }
     }
 
     /// Get The Serial Number String from a HID device.
@@ -463,7 +623,7 @@ impl HidDevice {
             )
         };
         let res = self.check_size(res)?;
-        unsafe { Ok(wchar_to_string(buf[..res].as_ptr())) }
+        unsafe { Ok(wchar_to_string(buf[..res].as_ptr()).into()) }
     }
 
     /// Get a string from a HID device, based on its string index.
@@ -478,6 +638,6 @@ impl HidDevice {
             )
         };
         let res = self.check_size(res)?;
-        unsafe { Ok(wchar_to_string(buf[..res].as_ptr())) }
+        unsafe { Ok(wchar_to_string(buf[..res].as_ptr()).into()) }
     }
 }
