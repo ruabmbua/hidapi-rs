@@ -163,7 +163,7 @@ impl HidApi {
     ///
     /// When multiple devices with the same vid and pid are available, then the
     /// first one found in the internal device list will be used. There are however
-    /// no grantees, which device this will be.
+    /// no guarantees, which device this will be.
     pub fn open(&self, vid: u16, pid: u16) -> HidResult<HidDevice> {
         let device = unsafe { ffi::hid_open(vid, pid, std::ptr::null()) };
 
