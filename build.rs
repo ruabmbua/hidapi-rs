@@ -20,7 +20,10 @@
 extern crate cc;
 extern crate pkg_config;
 
-use std::env;
+use std::{
+    env,
+    io::{Read, Write},
+};
 
 fn main() {
     let target = env::var("TARGET").unwrap();
@@ -40,11 +43,27 @@ fn main() {
     }
 }
 
+fn replace_on_file(path: &str, old: &str, new: &str) {
+    let mut prev_contents = String::new();
+
+    {
+        let mut f = std::fs::OpenOptions::new().read(true).open(path).unwrap();
+        f.read_to_string(&mut prev_contents).unwrap();
+        prev_contents = prev_contents.replace(old, new);
+    }
+
+    {
+        let mut f = std::fs::OpenOptions::new().write(true).open(path).unwrap();
+        f.write(prev_contents.as_bytes()).unwrap();
+        f.flush().unwrap();
+    }
+}
+
 fn compile_linux() {
     // First check the features enabled for the crate.
     // Only one linux backend should be enabled at a time.
 
-    let avail_backends: [(&'static str, Box<dyn Fn()>); 4] = [
+    let avail_backends: [(&'static str, Box<dyn Fn()>); 5] = [
         (
             "LINUX_STATIC_HIDRAW",
             Box::new(|| {
@@ -72,6 +91,22 @@ fn compile_linux() {
                     );
                 }
                 config.compile("libhidapi.a");
+            }),
+        ),
+        (
+            "LINUX_STATIC_RUSB",
+            Box::new(|| {
+                // It's expecting it to be on the system, but the file is local
+                replace_on_file("etc/hidapi/libusb/hid.c", "<libusb.h>", "\"libusb.h\"");
+
+                let mut config = cc::Build::new();
+                config
+                    .file("etc/hidapi/libusb/hid.c")
+                    .include("etc/")
+                    .include("etc/hidapi/hidapi");
+                config.compile("libhidapi.a");
+
+                replace_on_file("etc/hidapi/libusb/hid.c", "\"libusb.h\"", "<libusb.h>");
             }),
         ),
         (

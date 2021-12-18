@@ -38,6 +38,9 @@
 // Allow use of deprecated items, we defined ourselfes...
 #![allow(deprecated)]
 
+#[cfg(feature = "linux-static-rusb")]
+extern crate rusb;
+
 extern crate libc;
 
 mod error;
