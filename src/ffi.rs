@@ -4,7 +4,6 @@
 /// This file is part of hidapi-rs, based on hidapi_rust by Roland Ruckerbauer.
 /// *************************************************************************
 // For documentation look at the corresponding C header file hidapi.h
-use libc::{c_char, c_int, c_uchar, c_ushort, c_void, intptr_t, size_t, wchar_t};
 
 #[macro_export]
 macro_rules! cfg_libusb_only {
@@ -40,8 +39,15 @@ macro_rules! cfg_libusb_only {
     };
 }
 
+use libc::{c_char, c_int, c_uchar, c_ushort, c_void, size_t, wchar_t};
+cfg_libusb_only! {
+use libc::intptr_t;
+}
+
 pub type HidDevice = c_void;
+cfg_libusb_only! {
 type LibusbContext = c_void;
+}
 
 #[repr(C)]
 pub struct HidDeviceInfo {

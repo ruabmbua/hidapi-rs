@@ -4,7 +4,7 @@
 // This file is part of hidapi-rs, based on hidapi-rs by Osspial
 // **************************************************************************
 
-use super::HidDeviceInfo;
+use super::DeviceInfo;
 use libc::wchar_t;
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result};
@@ -14,17 +14,11 @@ pub enum HidError {
     HidApiError {
         message: String,
     },
-    #[deprecated]
-    HidApiErrorEmptyWithCause {
-        cause: Box<dyn Error + Send + Sync>,
-    },
     HidApiErrorEmpty,
     FromWideCharError {
         wide_char: wchar_t,
     },
     InitializationError,
-    #[deprecated]
-    OpenHidDeviceError,
     InvalidZeroSizeData,
     IncompleteSendError {
         sent: usize,
@@ -34,7 +28,7 @@ pub enum HidError {
         mode: &'static str,
     },
     OpenHidDeviceWithDeviceInfoError {
-        device_info: Box<HidDeviceInfo>,
+        device_info: Box<DeviceInfo>,
     },
 }
 
@@ -42,11 +36,6 @@ impl Display for HidError {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             HidError::HidApiError { message } => write!(f, "hidapi error: {}", message),
-            HidError::HidApiErrorEmptyWithCause { cause } => write!(
-                f,
-                "hidapi error: (could not get error message), caused by: {}",
-                cause
-            ),
             HidError::HidApiErrorEmpty => write!(f, "hidapi error: (could not get error message)"),
             HidError::FromWideCharError { wide_char } => {
                 write!(f, "failed converting {:#X} to rust char", wide_char)
@@ -54,7 +43,6 @@ impl Display for HidError {
             HidError::InitializationError => {
                 write!(f, "Failed to initialize hidapi (maybe initialized before?)")
             }
-            HidError::OpenHidDeviceError => write!(f, "Failed opening hid device"),
             HidError::InvalidZeroSizeData => write!(f, "Invalid data: size can not be 0"),
             HidError::IncompleteSendError { sent, all } => write!(
                 f,
@@ -71,11 +59,4 @@ impl Display for HidError {
     }
 }
 
-impl Error for HidError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            HidError::HidApiErrorEmptyWithCause { cause } => Some(cause.as_ref()),
-            _ => None,
-        }
-    }
-}
+impl Error for HidError {}
