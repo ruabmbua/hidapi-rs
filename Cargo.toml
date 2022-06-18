@@ -17,7 +17,7 @@ links = "hidapi"
 documentation = "https://docs.rs/hidapi"
 
 [features]
-default = ["linux-static-libusb", "illumos-static-libusb"]
+default = ["linux-static-hidraw", "illumos-static-libusb"]
 linux-static-libusb = []
 linux-static-hidraw = []
 linux-shared-libusb = []
