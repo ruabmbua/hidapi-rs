@@ -83,6 +83,7 @@ pub use error::HidError;
 pub type HidResult<T> = Result<T, HidError>;
 
 const STRING_BUF_LEN: usize = 128;
+pub const HID_API_MAX_REPORT_DESCRIPTOR_SIZE: size_t = 4096;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum InitState {
@@ -726,6 +727,17 @@ impl HidDevice {
         };
         let res = self.check_size(res)?;
         unsafe { Ok(wchar_to_string(buf[..res].as_ptr()).into()) }
+    }
+
+    /// Get a report descriptor from a HID device
+    ///
+    /// User has to provide a preallocated buffer where the descriptor will be copied to.
+    /// It is recommended to use a preallocated buffer of [`HID_API_MAX_REPORT_DESCRIPTOR_SIZE`] size.
+    pub fn get_report_descriptor(&self, buf: &mut [u8]) -> HidResult<usize> {
+        let res = unsafe {
+            ffi::hid_get_report_descriptor(self._hid_device, buf.as_mut_ptr(), buf.len())
+        };
+        self.check_size(res)
     }
 
     /// Get [`DeviceInfo`] from a HID device.

@@ -86,6 +86,11 @@ extern "C" {
         string: *mut wchar_t,
         maxlen: size_t,
     ) -> c_int;
+    pub fn hid_get_report_descriptor(
+        hid_device: *mut HidDevice,
+        buf: *mut c_uchar,
+        buf_size: size_t,
+    ) -> c_int;
     pub fn hid_error(device: *mut HidDevice) -> *const wchar_t;
 }
 
