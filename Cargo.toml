@@ -82,9 +82,16 @@ nix = { version = "0.27", optional = true, features = ["fs", "ioctl", "poll"] }
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.48", features = ["Win32_Foundation"] }
 
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+tokio = { version = "1", features = ["rt", "macros", "time"] }
+
 [build-dependencies]
 cc = "1.0"
 pkg-config = "0.3"
+
+[[example]]
+name = "co2mon-tokio"
+required-features = ["async"]
 
 [package.metadata.docs.rs]
 rustdoc-args = ["--cfg", "docsrs"]
