@@ -31,14 +31,10 @@ fn main() {
         compile_windows();
     } else if target.contains("darwin") {
         compile_macos();
-    } else if target.contains("freebsd") {
-        compile_freebsd();
-    } else if target.contains("openbsd") {
-        compile_openbsd();
     } else if target.contains("illumos") {
         compile_illumos();
     } else {
-        panic!("Unsupported target os for hidapi-rs");
+        compile_unix();
     }
 }
 
@@ -126,16 +122,36 @@ fn compile_linux() {
 //
 //}
 
-fn compile_freebsd() {
-    pkg_config::probe_library("hidapi").expect("Unable to find hidapi");
-    println!("cargo:rustc-cfg=libusb");
-    println!("cargo:rustc-cfg=hidapi");
-}
+fn compile_unix() {
+    // hidapi can be provided by hidapi-libusb or hidapi
+    let avail_backends: [(&'static str, Box<dyn Fn()>); 2] = [
+        (
+            "UNIX_SHARED_LIBUSB",
+            Box::new(|| {
+                pkg_config::probe_library("hidapi-libusb").expect("Unable to find hidapi-libusb");
+                println!("cargo:rustc-cfg=libusb");
+                println!("cargo:rustc-cfg=hidapi");
+            }),
+        ),
+        (
+            "UNIX_SHARED_HIDAPI",
+            Box::new(|| {
+                pkg_config::probe_library("hidapi").expect("Unable to find hidapi");
+                println!("cargo:rustc-cfg=libusb");
+                println!("cargo:rustc-cfg=hidapi");
+            }),
+        ),
+    ];
+    let mut backends = avail_backends
+        .iter()
+        .filter(|f| env::var(format!("CARGO_FEATURE_{}", f.0)).is_ok());
 
-fn compile_openbsd() {
-    pkg_config::probe_library("hidapi-libusb").expect("Unable to find hidapi");
-    println!("cargo:rustc-cfg=libusb");
-    println!("cargo:rustc-cfg=hidapi");
+    if backends.clone().count() != 1 {
+        panic!("Exactly one unix hidapi backend must be selected.");
+    }
+
+    // Build it!
+    (backends.next().unwrap().1)();
 }
 
 fn compile_illumos() {
