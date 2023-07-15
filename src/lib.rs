@@ -63,6 +63,7 @@ extern crate nix;
 
 #[cfg(target_os = "windows")]
 extern crate winapi;
+use core_foundation::array::CFArray;
 #[cfg(target_os = "windows")]
 use winapi::shared::guiddef::GUID;
 
@@ -75,9 +76,11 @@ mod hidapi;
 #[cfg(feature = "linux-native")]
 #[cfg_attr(docsrs, doc(cfg(feature = "linux-native")))]
 mod linux_native;
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", hidapi))]
 #[cfg_attr(docsrs, doc(cfg(target_os = "macos")))]
 mod macos;
+#[cfg(feature = "macos-native")]
+mod macos_native;
 #[cfg(target_os = "windows")]
 #[cfg_attr(docsrs, doc(cfg(target_os = "windows")))]
 mod windows;
@@ -95,6 +98,8 @@ pub use error::HidError;
 use crate::hidapi::HidApiBackend;
 #[cfg(feature = "linux-native")]
 use linux_native::HidApiBackend;
+#[cfg(feature = "macos-native")]
+use macos_native::HidApiBackend;
 
 pub type HidResult<T> = Result<T, HidError>;
 pub const MAX_REPORT_DESCRIPTOR_SIZE: usize = 4096;
@@ -126,7 +131,7 @@ fn lazy_init(do_enumerate: bool) -> HidResult<()> {
                 return Err(HidError::InitializationError);
             }
 
-            #[cfg(all(target_os = "macos", feature = "macos-shared-device"))]
+            #[cfg(all(target_os = "macos", feature = "macos-shared-device", hidapi))]
             unsafe {
                 ffi::macos::hid_darwin_set_open_exclusive(0)
             }

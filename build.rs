@@ -38,7 +38,7 @@ fn main() {
     } else if target.contains("illumos") {
         compile_illumos();
     } else {
-        panic!("Unsupported target os for hidapi-rs");
+        panic!("Unsupported target os {target} for hidapi-rs");
     }
 }
 
@@ -202,12 +202,38 @@ fn compile_windows() {
 }
 
 fn compile_macos() {
-    cc::Build::new()
-        .file("etc/hidapi/mac/hid.c")
-        .include("etc/hidapi/hidapi")
-        .compile("libhidapi.a");
-    println!("cargo:rustc-cfg=hidapi");
-    println!("cargo:rustc-link-lib=framework=IOKit");
-    println!("cargo:rustc-link-lib=framework=CoreFoundation");
-    println!("cargo:rustc-link-lib=framework=AppKit")
+    let avail_backends: [(&'static str, Box<dyn Fn()>); 2] = [
+        (
+            "MACOS_HIDAPI",
+            Box::new(|| {
+                cc::Build::new()
+                    .file("etc/hidapi/mac/hid.c")
+                    .include("etc/hidapi/hidapi")
+                    .compile("libhidapi.a");
+                println!("cargo:rustc-cfg=hidapi");
+                println!("cargo:rustc-link-lib=framework=IOKit");
+                println!("cargo:rustc-link-lib=framework=CoreFoundation");
+                println!("cargo:rustc-link-lib=framework=AppKit")
+            }),
+        ),
+        (
+            "MACOS_NATIVE",
+            Box::new(|| {
+                // The udev crate takes care of finding its library
+                println!("cargo:rustc-link-lib=framework=IOKit");
+                println!("cargo:rustc-link-lib=framework=CoreFoundation");
+            }),
+        ),
+    ];
+
+    let mut backends = avail_backends
+        .iter()
+        .filter(|f| env::var(format!("CARGO_FEATURE_{}", f.0)).is_ok());
+
+    if backends.clone().count() != 1 {
+        panic!("Exactly one macos hidapi backend must be selected.");
+    }
+
+    // Build it!
+    (backends.next().unwrap().1)();
 }
