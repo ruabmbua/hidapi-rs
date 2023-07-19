@@ -63,7 +63,6 @@ extern crate nix;
 
 #[cfg(target_os = "windows")]
 extern crate winapi;
-use core_foundation::array::CFArray;
 #[cfg(target_os = "windows")]
 use winapi::shared::guiddef::GUID;
 
@@ -266,7 +265,10 @@ impl HidApi {
 #[derive(Clone, PartialEq)]
 enum WcharString {
     String(String),
-    #[cfg_attr(feature = "linux-native", allow(dead_code))]
+    #[cfg_attr(
+        any(feature = "linux-native", feature = "macos-native"),
+        allow(dead_code)
+    )]
     Raw(Vec<wchar_t>),
     None,
 }
@@ -435,7 +437,7 @@ trait HidDeviceBackendBase {
     fn read_timeout(&self, buf: &mut [u8], timeout: i32) -> HidResult<usize>;
     fn send_feature_report(&self, data: &[u8]) -> HidResult<()>;
     fn get_feature_report(&self, buf: &mut [u8]) -> HidResult<usize>;
-    fn set_blocking_mode(&self, blocking: bool) -> HidResult<()>;
+    fn set_blocking_mode(&mut self, blocking: bool) -> HidResult<()>;
     fn get_device_info(&self) -> HidResult<DeviceInfo>;
     fn get_manufacturer_string(&self) -> HidResult<Option<String>>;
     fn get_product_string(&self) -> HidResult<Option<String>>;
@@ -574,7 +576,7 @@ impl HidDevice {
     /// slice if there is no data to be read. In blocking mode, `read()` will
     /// wait (block) until there is data to read before returning.
     /// Modes can be changed at any time.
-    pub fn set_blocking_mode(&self, blocking: bool) -> HidResult<()> {
+    pub fn set_blocking_mode(&mut self, blocking: bool) -> HidResult<()> {
         self.inner.set_blocking_mode(blocking)
     }
 
