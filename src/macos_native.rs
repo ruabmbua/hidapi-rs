@@ -2,17 +2,16 @@ mod ffi;
 
 use core_foundation::{
     array::CFArray,
-    base::{kCFAllocatorDefault, CFGetTypeID, TCFType},
+    base::{kCFAllocatorDefault, CFGetTypeID, CFType, TCFType},
     data::CFData,
     dictionary::CFDictionary,
     mach_port::CFIndex,
     number::CFNumber,
     runloop::{
-        kCFRunLoopDefaultMode, CFRunLoop, CFRunLoopGetCurrent, CFRunLoopRef, CFRunLoopRunInMode,
-        CFRunLoopRunResult, CFRunLoopSource, CFRunLoopSourceContext, CFRunLoopSourceCreate,
-        CFRunLoopStop, CFRunLoopWakeUp,
+        kCFRunLoopDefaultMode, CFRunLoop, CFRunLoopRunInMode, CFRunLoopRunResult, CFRunLoopSource,
+        CFRunLoopSourceContext, CFRunLoopSourceCreate, CFRunLoopSourceSignal, CFRunLoopStop,
+        CFRunLoopWakeUp,
     },
-    set::{CFSet, CFSetGetValues},
     string::CFString,
 };
 use libc::{c_void, KERN_SUCCESS};
@@ -28,9 +27,7 @@ use std::{
 };
 
 use crate::macos_native::ffi::kIOReturnSuccess;
-use crate::macos_native::ffi::{
-    kIOHIDProductIDKey, kIOHIDVendorIDKey, IOHIDDevice, IOHIDDeviceRef,
-};
+use crate::macos_native::ffi::{kIOHIDProductIDKey, kIOHIDVendorIDKey, IOHIDDevice};
 use crate::DeviceInfo;
 use crate::HidDeviceBackendBase;
 use crate::HidDeviceBackendMacos;
@@ -38,17 +35,14 @@ use crate::HidError;
 use crate::HidResult;
 use crate::WcharString;
 
-use self::ffi::IOHIDDeviceRegisterRemovalCallback;
-use self::ffi::IOHIDDeviceScheduleWithRunLoop;
-use self::ffi::IOHIDDeviceSetReport;
-use self::ffi::IOHIDReportType;
+use self::ffi::io_service_t;
+use self::ffi::kIOHIDReportType;
+use self::ffi::IOHIDManager;
+use self::ffi::IOOptionBits;
 use self::ffi::IORegistryEntryIDMatching;
+use self::ffi::IORegistryEntrySearchCFProperty;
 use self::ffi::IOReturn;
 use self::ffi::IOServiceGetMatchingService;
-use self::ffi::{io_service_t, IOHIDDeviceUnscheduleFromRunLoop};
-use self::ffi::{IOHIDDeviceClose, IOHIDDeviceCreate};
-use self::ffi::{IOHIDDeviceGetReport, IOOptionBits};
-use self::ffi::{IOHIDDeviceRegisterInputReportCallback, IOHIDManager};
 
 pub struct HidDevice {
     /// If set to true, reads will block until data is available
@@ -70,7 +64,8 @@ struct SharedState {
     max_input_report_len: usize,
 
     // Reference to the run loop used to read from the device
-    run_loop: Mutex<Option<LoopRef>>,
+    run_loop: Mutex<Option<WrappedCFRunLoop>>,
+    source: Mutex<Option<LoopSource>>,
 
     device: Mutex<IOHIDDevice>,
 
@@ -80,14 +75,20 @@ struct SharedState {
 
     // Condition variable linked to input_reports
     condition: std::sync::Condvar,
-    input_reports: Mutex<VecDeque<InputReport>>,
+    input_reports: Mutex<VecDeque<Vec<u8>>>,
 }
 
-struct LoopRef(CFRunLoopRef);
+struct WrappedCFRunLoop(CFRunLoop);
 
 // TODO: Confirm that this is safe
-unsafe impl Send for LoopRef {}
-unsafe impl Sync for LoopRef {}
+unsafe impl Send for WrappedCFRunLoop {}
+unsafe impl Sync for WrappedCFRunLoop {}
+
+struct LoopSource(CFRunLoopSource);
+
+// TODO: Confirm that this is safe
+unsafe impl Send for LoopSource {}
+unsafe impl Sync for LoopSource {}
 
 pub struct HidApiBackend;
 
@@ -98,40 +99,12 @@ impl HidApiBackend {
         // Enumerate all devices
         manager.set_device_matching(None);
 
-        let set: CFSet<IOHIDDevice> = unsafe {
-            CFSet::<IOHIDDevice>::wrap_under_create_rule(ffi::IOHIDManagerCopyDevices(
-                manager.as_concrete_TypeRef(),
-            ))
-        };
+        let device_list = manager.copy_devices();
 
-        let num_devices = set.len();
-
-        let mut device_refs: Vec<IOHIDDeviceRef> = Vec::with_capacity(num_devices);
-
-        // TODO: Continue
-        unsafe {
-            CFSetGetValues(
-                set.as_concrete_TypeRef(),
-                device_refs.as_mut_ptr() as *mut *const c_void,
-            );
-
-            device_refs.set_len(num_devices);
-        }
-
-        let device_list: Vec<_> = device_refs
-            .into_iter()
-            .filter_map(|r| {
-                if r.is_null() {
-                    None
-                } else {
-                    unsafe { Some(IOHIDDevice::wrap_under_get_rule(r)) }
-                }
-            })
-            .collect();
-
-        let mut result_list = Vec::with_capacity(num_devices);
+        let mut result_list = Vec::with_capacity(device_list.len());
 
         for device in device_list {
+            // Some devices can appear multiple times, if they have multiple usage pairs
             let device_infos = get_device_infos(&device);
 
             result_list.extend_from_slice(&device_infos[..]);
@@ -170,11 +143,11 @@ fn get_device_infos(device: &IOHIDDevice) -> Vec<DeviceInfo> {
         .unwrap_or_default();
 
     let dev_info =
-        create_device_info_with_usage(&device, primary_usage_page as u16, primary_usage as u16);
+        create_device_info_with_usage(device, primary_usage_page as u16, primary_usage as u16);
 
     result_list.push(dev_info);
 
-    let usage_pairs = get_usage_pairs(&device);
+    let usage_pairs = get_usage_pairs(device);
 
     for usage_pair in &usage_pairs {
         let dict = unsafe { CFDictionary::wrap_under_get_rule(*usage_pair as _) };
@@ -202,7 +175,7 @@ fn get_device_infos(device: &IOHIDDevice) -> Vec<DeviceInfo> {
             continue;
         }
 
-        let dev_info = create_device_info_with_usage(&device, usage_page as u16, usage as u16);
+        let dev_info = create_device_info_with_usage(device, usage_page as u16, usage as u16);
         result_list.push(dev_info);
     }
 
@@ -213,7 +186,7 @@ fn create_device_info_with_usage(device: &IOHIDDevice, usage_page: u16, usage: u
     let vendor_id = device.get_i32_property(kIOHIDVendorIDKey);
     let product_id = device.get_i32_property(kIOHIDProductIDKey);
 
-    let iokit_dev = unsafe { ffi::IOHIDDeviceGetService(device.as_concrete_TypeRef()) };
+    let iokit_dev = device.service();
 
     let path = if iokit_dev != MACH_PORT_NULL {
         let mut entry_id = 0u64;
@@ -242,14 +215,6 @@ fn create_device_info_with_usage(device: &IOHIDDevice, usage_page: u16, usage: u
 
     let release_number = device.get_i32_property("VersionNumber").unwrap_or_default();
 
-    let is_usb_hid =device.get_i32_property("bInterfaceClass") == Some(3) /* kUSBHIDClass */;
-
-    let interface_number = if is_usb_hid {
-        device.get_i32_property("bInterfaceNumber").unwrap_or(-1)
-    } else {
-        -1
-    };
-
     let transport_str = device.get_string_property("Transport");
 
     let bus_type = match transport_str.as_deref() {
@@ -260,7 +225,38 @@ fn create_device_info_with_usage(device: &IOHIDDevice, usage_page: u16, usage: u
         _ => crate::BusType::Unknown,
     };
 
-    // TODO: Handle additional usage pages
+    let is_usb_hid = bus_type == crate::BusType::Usb;
+
+    let registry_entry = device.service();
+
+    // This property is not available for a IOHIDDevice. It is available for a IOUSBHostInterface,
+    // so we need to get the parent interface and check the property there.
+    let interface_number = if is_usb_hid {
+        let plane = CString::new("IOService").unwrap();
+
+        let return_value = unsafe {
+            let ret_val = IORegistryEntrySearchCFProperty(
+                registry_entry,
+                plane.as_ptr(),
+                CFString::from_static_string("bInterfaceNumber").as_concrete_TypeRef(),
+                kCFAllocatorDefault,
+                2 | 1, /* kIORegistryIterateParents | kIORegistryIterateRecursively */
+            );
+
+            if !ret_val.is_null() {
+                Some(CFType::wrap_under_create_rule(ret_val))
+            } else {
+                None
+            }
+        };
+
+        return_value
+            .and_then(|rv| rv.downcast_into::<CFNumber>())
+            .and_then(|n| n.to_i32())
+            .unwrap_or(-1)
+    } else {
+        -1
+    };
 
     DeviceInfo {
         vendor_id: vendor_id.unwrap_or_default() as u16,
@@ -271,19 +267,21 @@ fn create_device_info_with_usage(device: &IOHIDDevice, usage_page: u16, usage: u
         release_number: release_number as u16,
         manufacturer_string: WcharString::String(manufacturer),
         product_string: WcharString::String(product),
-        usage_page: usage_page as u16,
-        usage: usage as u16,
+        usage_page,
+        usage,
         interface_number,
     }
 }
 
 fn get_usage_pairs(device: &IOHIDDevice) -> CFArray {
-    device.get_array_property("DeviceUsagePairs").unwrap()
+    device
+        .property(&CFString::from_static_string("DeviceUsagePairs"))
+        .unwrap()
 }
 
 impl HidDeviceBackendBase for HidDevice {
     fn write(&self, data: &[u8]) -> HidResult<usize> {
-        self.set_report(IOHIDReportType::kIOHIDReportTypeOutput, data)
+        self.set_report(kIOHIDReportType::Output, data)
     }
 
     fn read(&self, buf: &mut [u8]) -> HidResult<usize> {
@@ -323,13 +321,11 @@ impl HidDeviceBackendBase for HidDevice {
                 Ok(mut report_list) => {
                     let report = report_list.pop_front().unwrap();
 
-                    return Ok(return_data(&report, buf));
+                    Ok(return_data(&report, buf))
                 }
-                Err(_e) => {
-                    return Err(HidError::HidApiError {
-                        message: "hid_read_timeout: error waiting for more data".to_string(),
-                    });
-                }
+                Err(_e) => Err(HidError::HidApiError {
+                    message: "hid_read_timeout: error waiting for more data".to_string(),
+                }),
             }
         } else if timeout > 0 {
             let res = self
@@ -359,13 +355,13 @@ impl HidDeviceBackendBase for HidDevice {
     }
 
     fn send_feature_report(&self, data: &[u8]) -> HidResult<()> {
-        let _ = self.set_report(IOHIDReportType::kIOHIDReportTypeFeature, data)?;
+        let _ = self.set_report(kIOHIDReportType::Feature, data)?;
 
         Ok(())
     }
 
     fn get_feature_report(&self, buf: &mut [u8]) -> HidResult<usize> {
-        self.get_report(IOHIDReportType::kIOHIDReportTypeFeature, buf)
+        self.get_report(kIOHIDReportType::Feature, buf)
     }
 
     fn set_blocking_mode(&mut self, blocking: bool) -> HidResult<()> {
@@ -409,7 +405,7 @@ impl HidDeviceBackendBase for HidDevice {
     fn get_report_descriptor(&self, buf: &mut [u8]) -> HidResult<usize> {
         let device = self.shared_state.device.lock().unwrap();
 
-        let Some(data) = device.get_property(&CFString::from_static_string("ReportDescriptor")).and_then(|d| d.downcast_into::<CFData>()) else {
+        let Some(data) = device.property::<CFData>(&CFString::from_static_string("ReportDescriptor")) else {
             return Err(HidError::HidApiError {
                 message: "Failed to get kIOHIDReportDescriptorKey property".to_string(),
             });
@@ -435,10 +431,9 @@ impl HidDeviceBackendMacos for HidDevice {
 
 impl Drop for HidDevice {
     fn drop(&mut self) {
-        // TODO: Add check for macos version
-
         let run_loop_mode = CFString::new(&self.shared_state.run_loop_mode);
 
+        // We currently assume that macOS is newer than 10.10 (see hid_close in hidapi)
         if !self.shared_state.disconnected.load(Ordering::Relaxed) {
             // Callbacks are removed in the thread
 
@@ -447,32 +442,35 @@ impl Drop for HidDevice {
             let device = self.shared_state.device.lock().unwrap();
 
             // Move device to run loop of main thread
-            unsafe {
-                IOHIDDeviceUnscheduleFromRunLoop(
-                    device.as_concrete_TypeRef(),
-                    run_loop.0,
-                    run_loop_mode.as_concrete_TypeRef(),
-                );
+            device.unschedule_from_run_loop(&run_loop.0, &run_loop_mode);
 
-                IOHIDDeviceScheduleWithRunLoop(
-                    device.as_concrete_TypeRef(),
-                    CFRunLoop::get_main().as_concrete_TypeRef(),
-                    kCFRunLoopDefaultMode,
-                );
-            }
+            // unsafe because of access to kCFRunLoopDefaultMode static
+            let default_mode = unsafe {
+                // create rule is used because this is a static string,
+                // the reference count should not be incremented.
+                CFString::wrap_under_create_rule(kCFRunLoopDefaultMode)
+            };
+            device.schedule_with_run_loop(&CFRunLoop::get_main(), &default_mode);
         }
 
         self.shared_state
             .shutdown_thread
             .store(true, Ordering::Relaxed);
 
-        // TODO: Signal source
+        {
+            let source = self.shared_state.source.lock().unwrap();
+
+            if let Some(source) = source.as_ref() {
+                unsafe { CFRunLoopSourceSignal(source.0.as_concrete_TypeRef()) }
+            }
+        }
+
         {
             let run_loop = self.shared_state.run_loop.lock().unwrap();
 
             if let Some(run_loop) = run_loop.as_ref() {
                 unsafe {
-                    CFRunLoopWakeUp(run_loop.0);
+                    CFRunLoopWakeUp(run_loop.0.as_concrete_TypeRef());
                 }
             }
         }
@@ -488,8 +486,8 @@ impl Drop for HidDevice {
             {
                 let device = self.shared_state.device.lock().unwrap();
 
-                let result =
-                    unsafe { IOHIDDeviceClose(device.as_concrete_TypeRef(), self.open_options) };
+                // Error is also ignored in hid_close
+                let _result = device.close(self.open_options);
             }
         }
 
@@ -498,10 +496,10 @@ impl Drop for HidDevice {
     }
 }
 
-fn return_data(report: &InputReport, buf: &mut [u8]) -> usize {
-    let copy_len = buf.len().min(report.data.len());
+fn return_data(report: &[u8], buf: &mut [u8]) -> usize {
+    let copy_len = buf.len().min(report.len());
 
-    buf[..copy_len].copy_from_slice(&report.data[..copy_len]);
+    buf[..copy_len].copy_from_slice(&report[..copy_len]);
 
     copy_len
 }
@@ -535,11 +533,9 @@ impl HidDevice {
     pub(crate) fn open_path(device_path: &CStr) -> HidResult<Self> {
         let entry = open_service_registry_from_path(device_path);
 
-        let handle = unsafe { IOHIDDeviceCreate(kCFAllocatorDefault, entry) };
+        let device = IOHIDDevice::create(std::ptr::null(), entry);
 
-        let device = unsafe { IOHIDDevice::wrap_under_create_rule(handle) };
-
-        let ret = unsafe { ffi::IOHIDDeviceOpen(device.as_concrete_TypeRef(), 0) };
+        let ret = device.open(0);
 
         if ret != kIOReturnSuccess {
             return Err(HidError::HidApiError {
@@ -569,6 +565,7 @@ impl HidDevice {
             shutdown_barrier: Barrier::new(2),
             condition: Condvar::new(),
             input_reports: Mutex::new(VecDeque::new()),
+            source: Mutex::new(None),
         });
 
         let thread_shared_state = shared_state.clone();
@@ -592,7 +589,7 @@ impl HidDevice {
     }
 
     // See hidapi set_report()
-    fn set_report(&self, report_type: IOHIDReportType, data: &[u8]) -> HidResult<usize> {
+    fn set_report(&self, report_type: kIOHIDReportType, data: &[u8]) -> HidResult<usize> {
         if data.is_empty() {
             return Err(HidError::InvalidZeroSizeData);
         }
@@ -614,15 +611,7 @@ impl HidDevice {
 
         let device = self.shared_state.device.lock().unwrap();
 
-        let res = unsafe {
-            IOHIDDeviceSetReport(
-                device.as_concrete_TypeRef(),
-                report_type,
-                report_id as _,
-                data_to_send.as_ptr(),
-                data_to_send.len() as _,
-            )
-        };
+        let res = device.set_report(report_type, report_id as _, data_to_send);
 
         if res != kIOReturnSuccess {
             return Err(HidError::HidApiError {
@@ -633,7 +622,7 @@ impl HidDevice {
         Ok(data_to_send.len())
     }
 
-    fn get_report(&self, report_type: IOHIDReportType, buf: &mut [u8]) -> HidResult<usize> {
+    fn get_report(&self, report_type: kIOHIDReportType, buf: &mut [u8]) -> HidResult<usize> {
         let report_id = buf[0];
 
         let mut report_data = &mut buf[..];
@@ -643,6 +632,8 @@ impl HidDevice {
             report_data = &mut buf[1..];
         }
 
+        println!("Report id: {}", report_id);
+
         if self.shared_state.disconnected.load(Ordering::Relaxed) {
             return Err(HidError::HidApiError {
                 message: "Device is disconnected".to_string(),
@@ -651,17 +642,7 @@ impl HidDevice {
 
         let device = self.shared_state.device.lock().unwrap();
 
-        let mut report_length = report_data.len() as isize;
-
-        let res = unsafe {
-            IOHIDDeviceGetReport(
-                device.as_concrete_TypeRef(),
-                report_type,
-                report_id as _,
-                report_data.as_mut_ptr(),
-                &mut report_length,
-            )
-        };
+        let (mut report_length, res) = device.get_report(report_type, report_id as _, report_data);
 
         if res != kIOReturnSuccess {
             return Err(HidError::HidApiError {
@@ -672,14 +653,12 @@ impl HidDevice {
         if report_id == 0 {
             // 0 report number still present at the beginning
             report_length += 1;
+
+            assert_eq!(buf[0], 0);
         }
 
         Ok(report_length as usize)
     }
-}
-
-struct InputReport {
-    data: Vec<u8>,
 }
 
 // TODO: Figure out why parameters are unused
@@ -687,7 +666,7 @@ extern "C" fn hid_report_callback(
     context: *mut c_void,
     _result: IOReturn,
     _sender: *mut c_void,
-    _report_type: IOHIDReportType,
+    _report_type: kIOHIDReportType,
     _report_id: u32,
     report: *mut u8,
     report_length: CFIndex,
@@ -704,9 +683,7 @@ extern "C" fn hid_report_callback(
         input_reports.pop_front();
     }
 
-    input_reports.push_back(InputReport {
-        data: data.to_vec(),
-    });
+    input_reports.push_back(data.to_vec());
 
     shared_state.condition.notify_one();
 }
@@ -715,38 +692,24 @@ fn read_thread_fun(barrier: Arc<Barrier>, shared_state: Arc<SharedState>) {
     // This must live as long as the callback is registered
     let mut input_report_buffer = vec![0u8; shared_state.max_input_report_len];
 
-    let ctx_ptr = Arc::as_ptr(&shared_state);
+    // This must live as long as the callback is registered
+    let ctx_ptr = Arc::as_ptr(&shared_state) as *const c_void as *mut c_void;
     let run_loop_mode = CFString::new(&shared_state.run_loop_mode);
 
     {
         let device = shared_state.device.lock().unwrap();
 
-        // TODO: setup callbacks
         unsafe {
-            IOHIDDeviceRegisterInputReportCallback(
-                device.as_concrete_TypeRef(),
-                input_report_buffer.as_mut_ptr(),
-                input_report_buffer.len() as _,
+            device.register_input_report_callback(
+                &mut input_report_buffer,
                 Some(hid_report_callback),
-                ctx_ptr as *const c_void as *mut _,
-            )
-        }
-
-        unsafe {
-            IOHIDDeviceRegisterRemovalCallback(
-                device.as_concrete_TypeRef(),
-                Some(hid_removal_callback),
-                ctx_ptr as *const c_void as *mut _,
-            )
-        }
-
-        unsafe {
-            IOHIDDeviceScheduleWithRunLoop(
-                device.as_concrete_TypeRef(),
-                CFRunLoopGetCurrent(),
-                run_loop_mode.as_concrete_TypeRef(),
+                ctx_ptr,
             );
         }
+
+        unsafe { device.register_removal_callback(Some(hid_removal_callback), ctx_ptr) }
+
+        device.schedule_with_run_loop(&CFRunLoop::get_current(), &run_loop_mode);
 
         let mut ctx = CFRunLoopSourceContext {
             version: 0,
@@ -770,12 +733,15 @@ fn read_thread_fun(barrier: Arc<Barrier>, shared_state: Arc<SharedState>) {
         let current_run_loop = CFRunLoop::get_current();
 
         current_run_loop.add_source(&source, run_loop_mode.as_concrete_TypeRef());
+
+        let mut shared_source = shared_state.source.lock().unwrap();
+        *shared_source = Some(LoopSource(source));
     }
 
     {
         let mut run_loop = shared_state.run_loop.lock().unwrap();
 
-        *run_loop = Some(unsafe { LoopRef(CFRunLoopGetCurrent()) });
+        *run_loop = Some(WrappedCFRunLoop(CFRunLoop::get_current()));
     }
 
     barrier.wait();
@@ -810,21 +776,17 @@ fn read_thread_fun(barrier: Arc<Barrier>, shared_state: Arc<SharedState>) {
     {
         let device = shared_state.device.lock().unwrap();
 
+        unsafe {
+            device.register_input_report_callback(
+                &mut input_report_buffer,
+                None,
+                std::ptr::null_mut(),
+            );
+        }
+
         // TODO: Remove the callbacks
         unsafe {
-            IOHIDDeviceRegisterInputReportCallback(
-                device.as_concrete_TypeRef(),
-                input_report_buffer.as_mut_ptr(),
-                input_report_buffer.len() as _,
-                None,
-                std::ptr::null_mut(),
-            );
-
-            IOHIDDeviceRegisterRemovalCallback(
-                device.as_concrete_TypeRef(),
-                None,
-                std::ptr::null_mut(),
-            );
+            device.register_removal_callback(None, std::ptr::null_mut());
         }
     }
 
@@ -838,7 +800,7 @@ extern "C" fn perform_signal_callback(context: *const c_void) {
 
     if let Some(ref run_loop_ref) = *run_loop_ref {
         unsafe {
-            CFRunLoopStop(run_loop_ref.0);
+            CFRunLoopStop(run_loop_ref.0.as_concrete_TypeRef());
         }
     }
 }
@@ -852,7 +814,7 @@ extern "C" fn hid_removal_callback(context: *mut c_void, _result: IOReturn, _sen
     let run_loop = shared_state.run_loop.lock().unwrap();
     if let Some(ref run_lop) = *run_loop {
         unsafe {
-            CFRunLoopStop(run_lop.0);
+            CFRunLoopStop(run_lop.0.as_concrete_TypeRef());
         }
     }
 }

@@ -284,7 +284,7 @@ impl From<WcharString> for Option<String> {
 
 /// The underlying HID bus type.
 #[repr(C)]
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum BusType {
     Unknown = 0x00,
     Usb = 0x01,
