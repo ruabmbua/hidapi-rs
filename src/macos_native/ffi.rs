@@ -73,7 +73,7 @@ impl IOHIDManager {
         unsafe { IOHIDManager::wrap_under_create_rule(manager) }
     }
 
-    pub fn set_device_matching(&self, matching: Option<&CFDictionary>) {
+    pub fn set_device_matching(&self, matching: Option<&CFDictionary<CFString, CFNumber>>) {
         unsafe {
             IOHIDManagerSetDeviceMatching(
                 self.as_concrete_TypeRef(),

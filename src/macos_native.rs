@@ -3,7 +3,7 @@ use core_foundation::{
     array::CFArray,
     base::{kCFAllocatorDefault, CFGetTypeID, CFType, TCFType},
     data::CFData,
-    dictionary::CFDictionary,
+    dictionary::{CFDictionary, CFMutableDictionary},
     mach_port::CFIndex,
     number::CFNumber,
     runloop::{
@@ -110,10 +110,38 @@ pub struct HidApiBackend;
 
 impl HidApiBackend {
     pub fn get_hid_device_info_vector() -> HidResult<Vec<DeviceInfo>> {
+        HidApiBackend::enumerate(None, None)
+    }
+
+    fn enumerate(vendor_id: Option<u16>, product_id: Option<u16>) -> HidResult<Vec<DeviceInfo>> {
         let manager = IOHIDManager::create();
 
-        // Enumerate all devices
-        manager.set_device_matching(None);
+        if vendor_id.is_some() || product_id.is_some() {
+            let mut matching_dict: CFMutableDictionary<CFString, CFNumber> =
+                CFMutableDictionary::new();
+
+            if let Some(vendor_id) = vendor_id {
+                matching_dict.set(
+                    CFString::from_static_string(kIOHIDVendorIDKey),
+                    CFNumber::from(vendor_id as i32),
+                )
+            }
+
+            if let Some(product_id) = product_id {
+                matching_dict.set(
+                    CFString::from_static_string(kIOHIDProductIDKey),
+                    CFNumber::from(product_id as i32),
+                )
+            }
+
+            let matching = matching_dict.to_immutable();
+
+            // Enumerate all devices
+            manager.set_device_matching(Some(&matching));
+        } else {
+            // Enumerate all devices
+            manager.set_device_matching(None);
+        }
 
         let device_list = manager.copy_devices();
 
@@ -526,9 +554,7 @@ fn return_data(report: &[u8], buf: &mut [u8]) -> usize {
 
 impl HidDevice {
     pub(crate) fn open(vid: u16, pid: u16, sn: Option<&str>) -> HidResult<Self> {
-        // TODO: Filter devices when enumerating
-
-        let devices = HidApiBackend::get_hid_device_info_vector()?;
+        let devices = HidApiBackend::enumerate(Some(vid), Some(pid))?;
 
         let target_sn = match sn {
             Some(sn) => WcharString::String(sn.to_string()),
