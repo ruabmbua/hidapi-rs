@@ -58,7 +58,7 @@
 //! an opt-in that can be enabled with the `macos-shared-device` feature flag.
 
 extern crate libc;
-#[cfg(feature = "linux-native")]
+#[cfg(all(feature = "linux-native", target_os = "linux"))]
 extern crate nix;
 
 #[cfg(target_os = "windows")]
@@ -72,8 +72,8 @@ mod ffi;
 #[cfg(hidapi)]
 mod hidapi;
 
-#[cfg(feature = "linux-native")]
-#[cfg_attr(docsrs, doc(cfg(feature = "linux-native")))]
+#[cfg(all(feature = "linux-native", target_os = "linux"))]
+#[cfg_attr(docsrs, doc(cfg(all(feature = "linux-native", target_os = "linux"))))]
 mod linux_native;
 #[cfg(all(target_os = "macos", hidapi))]
 #[cfg_attr(docsrs, doc(cfg(target_os = "macos")))]
@@ -95,7 +95,7 @@ pub use error::HidError;
 
 #[cfg(hidapi)]
 use crate::hidapi::HidApiBackend;
-#[cfg(feature = "linux-native")]
+#[cfg(all(feature = "linux-native", target_os = "linux"))]
 use linux_native::HidApiBackend;
 #[cfg(feature = "macos-native")]
 use macos_native::HidApiBackend;
@@ -266,7 +266,10 @@ impl HidApi {
 enum WcharString {
     String(String),
     #[cfg_attr(
-        any(feature = "linux-native", feature = "macos-native"),
+        any(
+            all(feature = "linux-native", target_os = "linux"),
+            all(feature = "macos-native", target_os = "macos")
+        ),
         allow(dead_code)
     )]
     Raw(Vec<wchar_t>),

@@ -75,7 +75,7 @@ impl From<std::io::Error> for HidError {
     }
 }
 
-#[cfg(feature = "linux-native")]
+#[cfg(all(feature = "linux-native", target_os = "linux"))]
 impl From<nix::errno::Errno> for HidError {
     fn from(e: nix::errno::Errno) -> Self {
         Self::IoError { error: e.into() }
