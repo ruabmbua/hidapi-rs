@@ -35,8 +35,5 @@ let res = device.write(&buf).unwrap();
 println!("Wrote: {:?} byte(s)", res);
 ```
 
-
-## Mac native
-Supports macOS 10.10 or later only
 # Documentation
 Available at [docs.rs](https://docs.rs/hidapi).

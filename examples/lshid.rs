@@ -17,7 +17,7 @@ fn main() {
         Ok(api) => {
             for device in api.device_list() {
                 println!(
-                    "VID: {:04x}, PID: {:04x}, Serial: {}, Product name: {}, path={:?}",
+                    "VID: {:04x}, PID: {:04x}, Serial: {}, Product name: {}",
                     device.vendor_id(),
                     device.product_id(),
                     match device.serial_number() {
@@ -27,8 +27,7 @@ fn main() {
                     match device.product_string() {
                         Some(s) => s,
                         _ => "<COULD NOT FETCH>",
-                    },
-                    device.path()
+                    }
                 );
             }
         }

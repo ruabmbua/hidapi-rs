@@ -33,7 +33,6 @@ macos-native = ["dep:core-foundation", "dep:mach2"]
 
 [dependencies]
 libc = "0.2"
-log = "0.4.19"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 udev = { version = "0.7", optional = true }

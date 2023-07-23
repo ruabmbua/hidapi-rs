@@ -313,12 +313,6 @@ impl<'callback, T> Drop for CallbackGuard<'callback, T> {
     fn drop(&mut self) {
         let ctx_ptr = Arc::as_ptr(&self.context) as *mut c_void;
 
-        log::debug!(
-            "Dropping callback guard for device {:?} with context {:p}",
-            self.device,
-            ctx_ptr,
-        );
-
         unsafe {
             IOHIDDeviceRegisterInputReportCallback(
                 self.device.as_concrete_TypeRef(),
