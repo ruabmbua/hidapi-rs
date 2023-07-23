@@ -16,6 +16,7 @@ use core_foundation::{
 use mach2::port::MACH_PORT_NULL;
 
 use std::{
+    cell::Cell,
     collections::VecDeque,
     ffi::{c_void, CStr, CString},
     sync::{
@@ -45,7 +46,7 @@ use self::ffi::{kIOMainPortDefault, IOHIDManager};
 #[derive(Debug)]
 pub struct HidDevice {
     /// If set to true, reads will block until data is available
-    blocking: bool,
+    blocking: Cell<bool>,
 
     /// Options used to open the device
     open_options: IOOptionBits,
@@ -333,7 +334,7 @@ impl HidDeviceBackendBase for HidDevice {
     }
 
     fn read(&self, buf: &mut [u8]) -> HidResult<usize> {
-        let timeout = if self.blocking { -1 } else { 0 };
+        let timeout = if self.blocking.get() { -1 } else { 0 };
 
         self.read_timeout(buf, timeout)
     }
@@ -412,8 +413,8 @@ impl HidDeviceBackendBase for HidDevice {
         self.get_report(kIOHIDReportType::Feature, buf)
     }
 
-    fn set_blocking_mode(&mut self, blocking: bool) -> HidResult<()> {
-        self.blocking = blocking;
+    fn set_blocking_mode(&self, blocking: bool) -> HidResult<()> {
+        self.blocking.set(blocking);
         Ok(())
     }
 
@@ -629,7 +630,7 @@ impl HidDevice {
 
         Ok(Self {
             // TODO: Default value here
-            blocking: false,
+            blocking: Cell::new(false),
             // TODO: Set open options
             open_options: 0,
             reader_thread_handle: Some(reader_handle),

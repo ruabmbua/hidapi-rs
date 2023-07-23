@@ -440,7 +440,7 @@ trait HidDeviceBackendBase {
     fn read_timeout(&self, buf: &mut [u8], timeout: i32) -> HidResult<usize>;
     fn send_feature_report(&self, data: &[u8]) -> HidResult<()>;
     fn get_feature_report(&self, buf: &mut [u8]) -> HidResult<usize>;
-    fn set_blocking_mode(&mut self, blocking: bool) -> HidResult<()>;
+    fn set_blocking_mode(&self, blocking: bool) -> HidResult<()>;
     fn get_device_info(&self) -> HidResult<DeviceInfo>;
     fn get_manufacturer_string(&self) -> HidResult<Option<String>>;
     fn get_product_string(&self) -> HidResult<Option<String>>;

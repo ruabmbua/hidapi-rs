@@ -251,7 +251,7 @@ impl HidDeviceBackendBase for HidDevice {
         self.check_size(res)
     }
 
-    fn set_blocking_mode(&mut self, blocking: bool) -> HidResult<()> {
+    fn set_blocking_mode(&self, blocking: bool) -> HidResult<()> {
         let res = unsafe {
             ffi::hid_set_nonblocking(self._hid_device, if blocking { 0i32 } else { 1i32 })
         };
