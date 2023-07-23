@@ -1,5 +1,4 @@
 mod ffi;
-
 use core_foundation::{
     array::CFArray,
     base::{kCFAllocatorDefault, CFGetTypeID, CFType, TCFType},
@@ -14,11 +13,11 @@ use core_foundation::{
     },
     string::CFString,
 };
-use libc::{c_void, KERN_SUCCESS};
 use mach2::port::MACH_PORT_NULL;
+
 use std::{
     collections::VecDeque,
-    ffi::{CStr, CString},
+    ffi::{c_void, CStr, CString},
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc, Barrier, Condvar, Mutex,
@@ -26,28 +25,29 @@ use std::{
     time::Duration,
 };
 
-use crate::macos_native::ffi::kIOReturnSuccess;
-use crate::macos_native::ffi::{kIOHIDProductIDKey, kIOHIDVendorIDKey, IOHIDDevice};
-use crate::DeviceInfo;
-use crate::HidDeviceBackendBase;
-use crate::HidDeviceBackendMacos;
-use crate::HidError;
-use crate::HidResult;
-use crate::WcharString;
+use crate::{
+    macos_native::ffi::{
+        kIOHIDProductIDKey, kIOHIDVendorIDKey, kIOReturnSuccess, IOHIDDevice,
+        IORegistryEntryFromPath,
+    },
+    DeviceInfo, HidDeviceBackendBase, HidDeviceBackendMacos, HidError, HidResult, WcharString,
+};
 
-use self::ffi::io_service_t;
-use self::ffi::kIOHIDReportType;
-use self::ffi::IOHIDManager;
-use self::ffi::IOOptionBits;
-use self::ffi::IORegistryEntryIDMatching;
-use self::ffi::IORegistryEntrySearchCFProperty;
-use self::ffi::IOReturn;
-use self::ffi::IOServiceGetMatchingService;
+use self::ffi::{io_registry_entry_get_registry_entry_id, kIOHIDDeviceUsagePairsKey, IOOptionBits};
+use self::ffi::{io_service_t, kIORegistryIterateParents};
+use self::ffi::{kIOHIDManufacturerKey, kIOHIDSerialNumberKey, IORegistryEntryIDMatching};
+use self::ffi::{kIOHIDProductKey, IORegistryEntrySearchCFProperty};
+use self::ffi::{kIOHIDReportType, kIORegistryIterateRecursively};
+use self::ffi::{kIOHIDTransportKey, IOServiceGetMatchingService};
+use self::ffi::{kIOHIDVersionNumberKey, IOReturn};
+use self::ffi::{kIOMainPortDefault, IOHIDManager};
 
+#[derive(Debug)]
 pub struct HidDevice {
     /// If set to true, reads will block until data is available
     blocking: bool,
 
+    /// Options used to open the device
     open_options: IOOptionBits,
 
     /// Handle of thread responsible for reading from the device
@@ -57,6 +57,7 @@ pub struct HidDevice {
     shared_state: Arc<SharedState>,
 }
 
+#[derive(Debug)]
 struct SharedState {
     // Run loop mode used to read from the device
     run_loop_mode: String,
@@ -78,15 +79,30 @@ struct SharedState {
     input_reports: Mutex<VecDeque<Vec<u8>>>,
 }
 
+#[derive(Debug)]
 struct WrappedCFRunLoop(CFRunLoop);
 
-// TODO: Confirm that this is safe
+// This should be safe, according to documetation:
+// https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/Multithreading/RunLoopManagement/RunLoopManagement.html#//apple_ref/doc/uid/10000057i-CH16-SW26>
+//
+// It is recommended that changing the configuration a run loop should be done from the thread that owns the run loop whenever possible.
+// In the use here, we only use the wrapper to wake up the run loop, which is safe.
 unsafe impl Send for WrappedCFRunLoop {}
 unsafe impl Sync for WrappedCFRunLoop {}
 
+/// Wrapper struct for a run loop source
 struct LoopSource(CFRunLoopSource);
 
-// TODO: Confirm that this is safe
+impl std::fmt::Debug for LoopSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let source = format!("{:p}", self.0.as_CFTypeRef());
+
+        f.debug_tuple("LoopSource").field(&source).finish()
+    }
+}
+
+// The wrapper is only used to signal the source, which
+// is safe to do from any thread.
 unsafe impl Send for LoopSource {}
 unsafe impl Sync for LoopSource {}
 
@@ -188,34 +204,33 @@ fn create_device_info_with_usage(device: &IOHIDDevice, usage_page: u16, usage: u
 
     let iokit_dev = device.service();
 
-    let path = if iokit_dev != MACH_PORT_NULL {
-        let mut entry_id = 0u64;
-        let res = unsafe { ffi::IORegistryEntryGetRegistryEntryID(iokit_dev, &mut entry_id) };
+    let path = if let Some(service) = iokit_dev {
+        let entry_id = io_registry_entry_get_registry_entry_id(service);
 
-        if res == KERN_SUCCESS {
-            format!("DevSrvsID:{entry_id}")
-        } else {
-            String::new()
-        }
-
-        // TODO: Check resulting value
+        entry_id
+            .map(|id| format!("DevSrvsID:{id}"))
+            .unwrap_or_default()
     } else {
         String::new()
     };
 
     let serial_number = device
-        .get_string_property("SerialNumber")
+        .get_string_property(kIOHIDSerialNumberKey)
         .unwrap_or_default();
 
     let manufacturer = device
-        .get_string_property("Manufacturer")
+        .get_string_property(kIOHIDManufacturerKey)
         .unwrap_or_default();
 
-    let product = device.get_string_property("Product").unwrap_or_default();
+    let product = device
+        .get_string_property(kIOHIDProductKey)
+        .unwrap_or_default();
 
-    let release_number = device.get_i32_property("VersionNumber").unwrap_or_default();
+    let release_number = device
+        .get_i32_property(kIOHIDVersionNumberKey)
+        .unwrap_or_default();
 
-    let transport_str = device.get_string_property("Transport");
+    let transport_str = device.get_string_property(kIOHIDTransportKey);
 
     let bus_type = match transport_str.as_deref() {
         Some("USB") => crate::BusType::Usb,
@@ -227,33 +242,10 @@ fn create_device_info_with_usage(device: &IOHIDDevice, usage_page: u16, usage: u
 
     let is_usb_hid = bus_type == crate::BusType::Usb;
 
-    let registry_entry = device.service();
-
-    // This property is not available for a IOHIDDevice. It is available for a IOUSBHostInterface,
-    // so we need to get the parent interface and check the property there.
+    // TODO: This should not be represented as -1, but as None.
+    //       -1 is used to stay compatible with hidapi.
     let interface_number = if is_usb_hid {
-        let plane = CString::new("IOService").unwrap();
-
-        let return_value = unsafe {
-            let ret_val = IORegistryEntrySearchCFProperty(
-                registry_entry,
-                plane.as_ptr(),
-                CFString::from_static_string("bInterfaceNumber").as_concrete_TypeRef(),
-                kCFAllocatorDefault,
-                2 | 1, /* kIORegistryIterateParents | kIORegistryIterateRecursively */
-            );
-
-            if !ret_val.is_null() {
-                Some(CFType::wrap_under_create_rule(ret_val))
-            } else {
-                None
-            }
-        };
-
-        return_value
-            .and_then(|rv| rv.downcast_into::<CFNumber>())
-            .and_then(|n| n.to_i32())
-            .unwrap_or(-1)
+        get_usb_interface_number(device).unwrap_or(-1)
     } else {
         -1
     };
@@ -273,9 +265,37 @@ fn create_device_info_with_usage(device: &IOHIDDevice, usage_page: u16, usage: u
     }
 }
 
+fn get_usb_interface_number(device: &IOHIDDevice) -> Option<i32> {
+    let registry_entry = device.service()?;
+
+    let plane = CString::new("IOService").unwrap();
+
+    // This property is not available for a IOHIDDevice. It is available for a IOUSBHostInterface,
+    // so we need to get the parent interface and check the property there.
+    let property = unsafe {
+        let ret_val = IORegistryEntrySearchCFProperty(
+            registry_entry,
+            plane.as_ptr(),
+            CFString::from_static_string("bInterfaceNumber").as_concrete_TypeRef(),
+            kCFAllocatorDefault,
+            kIORegistryIterateParents | kIORegistryIterateRecursively,
+        );
+
+        if !ret_val.is_null() {
+            Some(CFType::wrap_under_create_rule(ret_val))
+        } else {
+            None
+        }
+    };
+
+    property
+        .and_then(|rv| rv.downcast_into::<CFNumber>())
+        .and_then(|n| n.to_i32())
+}
+
 fn get_usage_pairs(device: &IOHIDDevice) -> CFArray {
     device
-        .property(&CFString::from_static_string("DeviceUsagePairs"))
+        .property(&CFString::from_static_string(kIOHIDDeviceUsagePairsKey))
         .unwrap()
 }
 
@@ -294,9 +314,9 @@ impl HidDeviceBackendBase for HidDevice {
         let mut report_list = self.shared_state.input_reports.lock().unwrap();
 
         if let Some(report) = report_list.pop_front() {
-            let copy_len = buf.len().min(report.data.len());
+            let copy_len = buf.len().min(report.len());
 
-            buf[..copy_len].copy_from_slice(&report.data[..copy_len]);
+            buf[..copy_len].copy_from_slice(&report[..copy_len]);
 
             return Ok(copy_len);
         }
@@ -531,9 +551,12 @@ impl HidDevice {
     }
 
     pub(crate) fn open_path(device_path: &CStr) -> HidResult<Self> {
-        let entry = open_service_registry_from_path(device_path);
+        let entry =
+            open_service_registry_from_path(device_path).ok_or_else(|| HidError::HidApiError {
+                message: format!("Failed to open IOHIDDevice from path {device_path:?}"),
+            })?;
 
-        let device = IOHIDDevice::create(std::ptr::null(), entry);
+        let device = IOHIDDevice::create(None, entry);
 
         let ret = device.open(0);
 
@@ -694,18 +717,21 @@ fn read_thread_fun(barrier: Arc<Barrier>, shared_state: Arc<SharedState>) {
 
     // This must live as long as the callback is registered
     let ctx_ptr = Arc::as_ptr(&shared_state) as *const c_void as *mut c_void;
+
+    let input_report_context = shared_state.clone();
+
     let run_loop_mode = CFString::new(&shared_state.run_loop_mode);
+
+    let mut _input_report_callback = None;
 
     {
         let device = shared_state.device.lock().unwrap();
 
-        unsafe {
-            device.register_input_report_callback(
-                &mut input_report_buffer,
-                Some(hid_report_callback),
-                ctx_ptr,
-            );
-        }
+        _input_report_callback = Some(device.register_input_report_callback(
+            &mut input_report_buffer,
+            Some(hid_report_callback),
+            input_report_context,
+        ));
 
         unsafe { device.register_removal_callback(Some(hid_removal_callback), ctx_ptr) }
 
@@ -776,15 +802,9 @@ fn read_thread_fun(barrier: Arc<Barrier>, shared_state: Arc<SharedState>) {
     {
         let device = shared_state.device.lock().unwrap();
 
-        unsafe {
-            device.register_input_report_callback(
-                &mut input_report_buffer,
-                None,
-                std::ptr::null_mut(),
-            );
-        }
+        // unregister the input report callback
+        drop(_input_report_callback);
 
-        // TODO: Remove the callbacks
         unsafe {
             device.register_removal_callback(None, std::ptr::null_mut());
         }
@@ -819,21 +839,27 @@ extern "C" fn hid_removal_callback(context: *mut c_void, _result: IOReturn, _sen
     }
 }
 
-fn open_service_registry_from_path(path: &CStr) -> io_service_t {
-    let path = path.to_str().unwrap();
+fn open_service_registry_from_path(path: &CStr) -> Option<io_service_t> {
+    // TODO: Handle malformed path
+    let path = path.to_str().ok()?;
 
     if path.starts_with("DevSrvsID:") {
         // TODO: Handle malformed path
-        let entry_id: Option<u64> = path.trim_start_matches("DevSrvsID:").parse().ok();
+        let entry_id: u64 = path.trim_start_matches("DevSrvsID:").parse().ok()?;
 
-        if let Some(entry_id) = entry_id {
-            // 0 = kIOMasterPortDefault
-            unsafe { IOServiceGetMatchingService(0, IORegistryEntryIDMatching(entry_id)) }
-        } else {
-            MACH_PORT_NULL
-        }
+        let service = unsafe {
+            IOServiceGetMatchingService(kIOMainPortDefault, IORegistryEntryIDMatching(entry_id))
+        };
+
+        Some(service)
     } else {
         // TODO: Compatibility with old HIDAPI versions (old IOService: format)
-        MACH_PORT_NULL
+        let service = unsafe { IORegistryEntryFromPath(kIOMainPortDefault, path.as_ptr() as _) };
+
+        if service != MACH_PORT_NULL {
+            Some(service)
+        } else {
+            None
+        }
     }
 }

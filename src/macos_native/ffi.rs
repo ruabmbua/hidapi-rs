@@ -1,7 +1,8 @@
-use std::ffi::c_char;
+#![allow(non_upper_case_globals)]
+use std::{ffi::c_char, marker::PhantomData, sync::Arc};
 
 use core_foundation::{
-    base::{kCFAllocatorDefault, mach_port_t, CFAllocatorRef, CFType, CFTypeRef, TCFType},
+    base::{mach_port_t, CFAllocatorRef, CFType, CFTypeRef, TCFType},
     dictionary::{CFDictionary, CFDictionaryRef, CFMutableDictionaryRef},
     mach_port::CFIndex,
     number::CFNumber,
@@ -11,18 +12,34 @@ use core_foundation::{
     ConcreteCFType,
 };
 use libc::c_void;
-use mach2::kern_return::{kern_return_t, KERN_SUCCESS};
+use mach2::{
+    kern_return::{kern_return_t, KERN_SUCCESS},
+    port::MACH_PORT_NULL,
+};
 
-pub use self::io_hid_manager::IOHIDManager;
-pub use self::io_hid_manager::IOHIDManagerRef;
+pub use self::io_hid_device::{IOHIDDevice, IOHIDDeviceRef};
+pub use self::io_hid_manager::{IOHIDManager, IOHIDManagerRef};
 
-pub use self::io_hid_device::IOHIDDevice;
-pub use self::io_hid_device::IOHIDDeviceRef;
+// Keys are described in IOHIDDeviceKeys.h
 
-#[allow(non_upper_case_globals)]
 pub const kIOHIDVendorIDKey: &str = "VendorID";
-#[allow(non_upper_case_globals)]
 pub const kIOHIDProductIDKey: &str = "ProductID";
+pub const kIOHIDSerialNumberKey: &str = "SerialNumber";
+pub const kIOHIDManufacturerKey: &str = "Manufacturer";
+pub const kIOHIDProductKey: &str = "Product";
+pub const kIOHIDVersionNumberKey: &str = "VersionNumber";
+pub const kIOHIDTransportKey: &str = "Transport";
+pub const kIOHIDDeviceUsagePairsKey: &str = "DeviceUsagePairs";
+
+/// Default allocator for CoreFoundation.
+///
+/// See <https://developer.apple.com/documentation/corefoundation/kcfallocatordefault?language=objc>
+pub const kCFAllocatorDefault: CFAllocatorRef = std::ptr::null_mut();
+
+/// Default mach port for communication with IOKit.
+///
+/// See <https://developer.apple.com/documentation/iokit/kiomainportdefault?language=objc>
+pub(crate) const kIOMainPortDefault: mach_port_t = 0;
 
 /// Seperate module for the IOHIDManager type,
 /// so that we can allow non-snake case names.
@@ -154,9 +171,9 @@ impl IOHIDDevice {
     ///
     /// # Panic
     /// This function will panic if IOHIDDeviceCreate returns a null pointer.
-    pub fn create(allocator: CFAllocatorRef, service: io_service_t) -> Self {
+    pub fn create(allocator: Option<CFAllocatorRef>, service: io_service_t) -> Self {
         unsafe {
-            let device = IOHIDDeviceCreate(allocator, service);
+            let device = IOHIDDeviceCreate(allocator.unwrap_or(std::ptr::null()), service);
             IOHIDDevice::wrap_under_create_rule(device)
         }
     }
@@ -169,8 +186,14 @@ impl IOHIDDevice {
         unsafe { IOHIDDeviceClose(self.as_concrete_TypeRef(), options) }
     }
 
-    pub fn service(&self) -> io_service_t {
-        unsafe { IOHIDDeviceGetService(self.as_concrete_TypeRef()) }
+    pub fn service(&self) -> Option<io_service_t> {
+        let service = unsafe { IOHIDDeviceGetService(self.as_concrete_TypeRef()) };
+
+        if service != MACH_PORT_NULL {
+            Some(service)
+        } else {
+            None
+        }
     }
 
     /// Register a callback to be called when a report is received.
@@ -181,20 +204,28 @@ impl IOHIDDevice {
     ///
     /// The callback will be called from the CFRunLoop on which the device is registered,
     /// see `IOHIDDeviceScheduleWithRunLoop``
-    pub unsafe fn register_input_report_callback(
+    pub fn register_input_report_callback<'callback, T>(
         &self,
-        report: &mut [u8],
+        report: &'callback mut [u8],
         callback: IOHIDReportCallback,
-        context: *mut c_void,
-    ) {
+        context: Arc<T>,
+    ) -> CallbackGuard<'callback, T> {
+        let context_ptr = Arc::as_ptr(&context) as *mut c_void;
+
         unsafe {
             IOHIDDeviceRegisterInputReportCallback(
                 self.as_concrete_TypeRef(),
                 report.as_mut_ptr(),
                 report.len() as _,
                 callback,
-                context,
+                context_ptr,
             );
+        }
+
+        CallbackGuard {
+            device: self.clone(),
+            report: PhantomData,
+            context,
         }
     }
 
@@ -271,6 +302,35 @@ impl IOHIDDevice {
     }
 }
 
+#[must_use = "The callback will be unregistered when the returned guard is dropped"]
+pub struct CallbackGuard<'callback, T> {
+    device: IOHIDDevice,
+    report: PhantomData<&'callback mut [u8]>,
+    context: Arc<T>,
+}
+
+impl<'callback, T> Drop for CallbackGuard<'callback, T> {
+    fn drop(&mut self) {
+        let ctx_ptr = Arc::as_ptr(&self.context) as *mut c_void;
+
+        log::debug!(
+            "Dropping callback guard for device {:?} with context {:p}",
+            self.device,
+            ctx_ptr,
+        );
+
+        unsafe {
+            IOHIDDeviceRegisterInputReportCallback(
+                self.device.as_concrete_TypeRef(),
+                std::ptr::null_mut(),
+                0,
+                None,
+                ctx_ptr,
+            )
+        }
+    }
+}
+
 // TODO: Verify this
 unsafe impl Send for IOHIDDevice {}
 
@@ -288,6 +348,25 @@ pub type IOReturn = kern_return_t;
 #[allow(non_camel_case_types, non_upper_case_globals)]
 pub const kIOReturnSuccess: kern_return_t = KERN_SUCCESS;
 
+#[allow(non_upper_case_globals)]
+pub const kIORegistryIterateParents: IOOptionBits = 2;
+#[allow(non_upper_case_globals)]
+pub const kIORegistryIterateRecursively: IOOptionBits = 1;
+
+pub fn io_registry_entry_get_registry_entry_id(
+    entry: io_registry_entry_t,
+) -> Result<u64, IOReturn> {
+    let mut entry_id: u64 = 0;
+
+    let res = unsafe { IORegistryEntryGetRegistryEntryID(entry, &mut entry_id) };
+
+    if res == KERN_SUCCESS {
+        Ok(entry_id)
+    } else {
+        Err(res)
+    }
+}
+
 extern "C" {
     fn IOHIDManagerCreate(allocator: CFAllocatorRef, options: IOOptionBits) -> IOHIDManagerRef;
 
@@ -295,7 +374,7 @@ extern "C" {
 
     fn IOHIDManagerCopyDevices(manager: IOHIDManagerRef) -> CFSetRef;
 
-    pub fn IORegistryEntryGetRegistryEntryID(
+    fn IORegistryEntryGetRegistryEntryID(
         entry: io_registry_entry_t,
         entryID: *mut u64,
     ) -> kern_return_t;
@@ -314,6 +393,11 @@ extern "C" {
         allocator: CFAllocatorRef,
         options: IOOptionBits,
     ) -> CFTypeRef;
+
+    pub fn IORegistryEntryFromPath(
+        main_port: mach_port_t,
+        path: *const c_char, /* 512 bytes */
+    ) -> io_registry_entry_t;
 
     fn IOHIDDeviceGetProperty(device: IOHIDDeviceRef, key: CFStringRef) -> CFTypeRef;
 
