@@ -88,6 +88,11 @@ impl IOHIDManager {
         let set: CFSet<IOHIDDeviceRef> = unsafe {
             let set = IOHIDManagerCopyDevices(self.as_concrete_TypeRef());
 
+            // If no devices are found, a null pointer could be returned.
+            if set.is_null() {
+                return vec![];
+            }
+
             CFSet::wrap_under_create_rule(set)
         };
 
