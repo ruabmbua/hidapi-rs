@@ -1,5 +1,4 @@
-use winapi::shared::guiddef::GUID;
-
+use windows_sys::core::GUID;
 use crate::{HidDevice, HidResult};
 
 impl HidDevice {

@@ -1,8 +1,7 @@
 //! The extra behaviour for Windows
 
 use std::ptr::addr_of_mut;
-
-use winapi::shared::guiddef::GUID;
+use windows_sys::core::GUID;
 
 use super::HidDevice;
 use crate::{ffi, HidDeviceBackendBase, HidDeviceBackendWindows, HidResult};

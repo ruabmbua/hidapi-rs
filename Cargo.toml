@@ -30,6 +30,17 @@ illumos-shared-libusb = []
 macos-shared-device = []
 macos-hidapi = []
 macos-native = ["dep:core-foundation", "dep:mach2"]
+windows-native = [
+    "windows-sys/Win32_Devices_DeviceAndDriverInstallation",
+    "windows-sys/Win32_Devices_HumanInterfaceDevice",
+    "windows-sys/Win32_Devices_Properties",
+    "windows-sys/Win32_Security",
+    "windows-sys/Win32_Storage_EnhancedStorage",
+    "windows-sys/Win32_Storage_FileSystem",
+    "windows-sys/Win32_System_IO",
+    "windows-sys/Win32_System_Threading",
+    "windows-sys/Win32_UI_Shell_PropertiesSystem"
+]
 
 [dependencies]
 libc = "0.2"
@@ -39,7 +50,7 @@ udev = { version = "0.7", optional = true }
 nix = { version = "0.26", optional = true }
 
 [target.'cfg(windows)'.dependencies]
-winapi = "0.3.9"
+windows-sys = { version = "0.48", features = ["Win32_Foundation"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 core-foundation = { version = "0.9.3", optional = true }
