@@ -117,35 +117,41 @@ fn lazy_init(do_enumerate: bool) -> HidResult<()> {
 
     match *init_state {
         InitState::NotInit => {
-            #[cfg(all(libusb, not(target_os = "freebsd")))]
-            if !do_enumerate {
-                // Do not scan for devices in libusb_init()
-                // Must be set before calling it.
-                // This is needed on Android, where access to USB devices is limited
-                unsafe { ffi::libusb_set_option(std::ptr::null_mut(), 2) }
-            }
-
-            // Initialize the HID
-            #[cfg(hidapi)]
-            if unsafe { ffi::hid_init() } == -1 {
-                return Err(HidError::InitializationError);
-            }
-
-            #[cfg(all(target_os = "macos", feature = "macos-shared-device"))]
-            unsafe {
-                ffi::macos::hid_darwin_set_open_exclusive(0)
-            }
-
-            *init_state = InitState::Init {
-                enumerate: do_enumerate,
-            }
+            init(&mut init_state, do_enumerate)?;
         }
         InitState::Init { enumerate } => {
-            if enumerate != do_enumerate {
-                panic!("Trying to initialize hidapi with enumeration={}, but it is already initialized with enumeration={}.", do_enumerate, enumerate)
+            if !enumerate && do_enumerate {
+                init(&mut init_state, do_enumerate)?;
             }
         }
     }
+
+    Ok(())
+}
+
+fn init(init_state: &mut InitState, do_enumerate: bool) -> HidResult<()> {
+    #[cfg(all(libusb, not(target_os = "freebsd")))]
+    if !do_enumerate {
+        // Do not scan for devices in libusb_init()
+        // Must be set before calling it.
+        // This is needed on Android, where access to USB devices is limited
+        unsafe { ffi::libusb_set_option(std::ptr::null_mut(), 2) }
+    }
+
+    // Initialize the HID
+    #[cfg(hidapi)]
+    if unsafe { ffi::hid_init() } == -1 {
+        return Err(HidError::InitializationError);
+    }
+
+    #[cfg(all(target_os = "macos", feature = "macos-shared-device"))]
+    unsafe {
+        ffi::macos::hid_darwin_set_open_exclusive(0)
+    }
+
+    *init_state = InitState::Init {
+        enumerate: do_enumerate,
+    };
 
     Ok(())
 }
@@ -165,11 +171,6 @@ impl HidApi {
     /// Create a new hidapi context.
     ///
     /// Will also initialize the currently available device list.
-    ///
-    /// # Panics
-    ///
-    /// Panics if hidapi is already initialized in "without enumerate" mode
-    /// (i.e. if `new_without_enumerate()` has been called before).
     pub fn new() -> HidResult<Self> {
         lazy_init(true)?;
 
@@ -181,11 +182,6 @@ impl HidApi {
     /// Create a new hidapi context, in "do not enumerate" mode.
     ///
     /// This is needed on Android, where access to USB device enumeration is limited.
-    ///
-    /// # Panics
-    ///
-    /// Panics if hidapi is already initialized in "do enumerate" mode
-    /// (i.e. if `new()` has been called before).
     pub fn new_without_enumerate() -> HidResult<Self> {
         lazy_init(false)?;
 
