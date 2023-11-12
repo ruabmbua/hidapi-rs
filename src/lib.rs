@@ -74,15 +74,20 @@ mod hidapi;
 #[cfg(all(feature = "linux-native", target_os = "linux"))]
 #[cfg_attr(docsrs, doc(cfg(all(feature = "linux-native", target_os = "linux"))))]
 mod linux_native;
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", hidapi))]
 #[cfg_attr(docsrs, doc(cfg(target_os = "macos")))]
 mod macos;
+#[cfg(feature = "macos-native")]
+mod macos_native;
 #[cfg(target_os = "windows")]
 #[cfg_attr(docsrs, doc(cfg(target_os = "windows")))]
 mod windows;
 
 #[cfg(feature = "windows-native")]
-#[cfg_attr(docsrs, doc(cfg(all(feature = "windows-native", target_os = "windows"))))]
+#[cfg_attr(
+    docsrs,
+    doc(cfg(all(feature = "windows-native", target_os = "windows")))
+)]
 mod windows_native;
 
 use libc::wchar_t;
@@ -98,6 +103,8 @@ pub use error::HidError;
 use crate::hidapi::HidApiBackend;
 #[cfg(all(feature = "linux-native", target_os = "linux"))]
 use linux_native::HidApiBackend;
+#[cfg(feature = "macos-native")]
+use macos_native::HidApiBackend;
 #[cfg(all(feature = "windows-native", target_os = "windows"))]
 use windows_native::HidApiBackend;
 
@@ -131,7 +138,7 @@ fn lazy_init(do_enumerate: bool) -> HidResult<()> {
                 return Err(HidError::InitializationError);
             }
 
-            #[cfg(all(target_os = "macos", feature = "macos-shared-device"))]
+            #[cfg(all(target_os = "macos", feature = "macos-shared-device", hidapi))]
             unsafe {
                 ffi::macos::hid_darwin_set_open_exclusive(0)
             }
@@ -284,7 +291,13 @@ impl HidApi {
 #[derive(Clone, PartialEq)]
 enum WcharString {
     String(String),
-    #[cfg_attr(all(feature = "linux-native", target_os = "linux"), allow(dead_code))]
+    #[cfg_attr(
+        any(
+            all(feature = "linux-native", target_os = "linux"),
+            all(feature = "macos-native", target_os = "macos")
+        ),
+        allow(dead_code)
+    )]
     Raw(Vec<wchar_t>),
     None,
 }
@@ -300,7 +313,7 @@ impl From<WcharString> for Option<String> {
 
 /// The underlying HID bus type.
 #[repr(C)]
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum BusType {
     Unknown = 0x00,
     Usb = 0x01,
@@ -592,7 +605,7 @@ impl HidDevice {
     /// slice if there is no data to be read. In blocking mode, `read()` will
     /// wait (block) until there is data to read before returning.
     /// Modes can be changed at any time.
-    pub fn set_blocking_mode(&self, blocking: bool) -> HidResult<()> {
+    pub fn set_blocking_mode(&mut self, blocking: bool) -> HidResult<()> {
         self.inner.set_blocking_mode(blocking)
     }
 

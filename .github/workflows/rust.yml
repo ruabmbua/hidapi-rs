@@ -115,6 +115,21 @@ jobs:
       run: |
         curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
     - name: Build
-      run: cargo build --no-default-features --verbose
+      run: cargo build --no-default-features --features macos-hidapi --verbose
     - name: Run tests
-      run: cargo test --no-default-features --verbose
+      run: cargo test --no-default-features --features macos-hidapi --verbose
+
+  build-macos-native:
+    runs-on: macos-latest
+    steps:
+      - name: checkout repository and submodules
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+      - name: Install rust environment
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+      - name: Build
+        run: cargo build --no-default-features --features macos-native --verbose
+      - name: Run tests
+        run: cargo test --no-default-features --features macos-native --verbose
