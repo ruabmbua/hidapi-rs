@@ -303,7 +303,7 @@ impl HidApi {
 }
 
 #[allow(dead_code)]
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 enum WcharString {
     String(String),
     #[cfg_attr(all(feature = "linux-native", target_os = "linux"), allow(dead_code))]
@@ -322,7 +322,7 @@ impl From<WcharString> for Option<String> {
 
 /// The underlying HID bus type.
 #[repr(C)]
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum BusType {
     Unknown = 0x00,
     Usb = 0x01,
@@ -336,7 +336,7 @@ pub enum BusType {
 /// Note: Methods like `serial_number()` may return None, if the conversion to a
 /// String failed internally. You can however access the raw hid representation of the
 /// string by calling `serial_number_raw()`
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct DeviceInfo {
     path: CString,
     vendor_id: u16,
