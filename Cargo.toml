@@ -7,13 +7,13 @@ authors = [
     "Artyom Pavlov <newpavlov@gmail.com>",
     "mberndt123",
     "niklasad1",
-    "Stefan Kerkmann"
+    "Stefan Kerkmann",
 ]
 repository = "https://github.com/ruabmbua/hidapi-rs"
 description = "Rust-y wrapper around hidapi"
 license = "MIT"
 keywords = ["hid", "api", "usb", "binding", "wrapper"]
-build = "build.rs"
+build = "build/main.rs"
 links = "hidapi"
 documentation = "https://docs.rs/hidapi"
 edition = "2021"
@@ -43,14 +43,18 @@ include = [
 
 [features]
 default = ["linux-static-hidraw", "illumos-static-libusb"]
+
 linux-static-libusb = []
 linux-static-hidraw = []
 linux-shared-libusb = []
 linux-shared-hidraw = []
 linux-native = ["dep:udev", "dep:nix"]
+
 illumos-static-libusb = []
 illumos-shared-libusb = []
+
 macos-shared-device = []
+
 windows-native = [
     "windows-sys/Win32_Devices_DeviceAndDriverInstallation",
     "windows-sys/Win32_Devices_HumanInterfaceDevice",
@@ -60,7 +64,7 @@ windows-native = [
     "windows-sys/Win32_Storage_FileSystem",
     "windows-sys/Win32_System_IO",
     "windows-sys/Win32_System_Threading",
-    "windows-sys/Win32_UI_Shell_PropertiesSystem"
+    "windows-sys/Win32_UI_Shell_PropertiesSystem",
 ]
 
 [dependencies]

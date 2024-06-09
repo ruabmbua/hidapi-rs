@@ -75,18 +75,16 @@ pub use error::HidError;
 
 cfg_if! {
     if #[cfg(all(feature = "linux-native", target_os = "linux"))] {
-        //#[cfg_attr(docsrs, doc(cfg(all(feature = "linux-native", target_os = "linux"))))]
         mod linux_native;
         use linux_native::HidApiBackend;
     } else if #[cfg(all(feature = "windows-native", target_os = "windows"))] {
-        //#[cfg_attr(docsrs, doc(cfg(all(feature = "windows-native", target_os = "windows"))))]
         mod windows_native;
         use windows_native::HidApiBackend;
     } else if #[cfg(hidapi)] {
         mod hidapi;
         use hidapi::HidApiBackend;
     } else {
-        compile_error!("No backend selected");
+        compile_error!("No hidapi backend selected");
     }
 }
 
@@ -125,51 +123,14 @@ cfg_if! {
 pub type HidResult<T> = Result<T, HidError>;
 pub const MAX_REPORT_DESCRIPTOR_SIZE: usize = 4096;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum InitState {
-    NotInit,
-    Init { enumerate: bool },
+    Uninit { device_discovery: bool },
+    Init,
 }
 
-static INIT_STATE: Mutex<InitState> = Mutex::new(InitState::NotInit);
-
-fn lazy_init(do_enumerate: bool) -> HidResult<()> {
-    let mut init_state = INIT_STATE.lock().unwrap();
-
-    match *init_state {
-        InitState::NotInit => {
-            #[cfg(all(libusb, not(target_os = "freebsd")))]
-            if !do_enumerate {
-                // Do not scan for devices in libusb_init()
-                // Must be set before calling it.
-                // This is needed on Android, where access to USB devices is limited
-                unsafe { ffi::libusb_set_option(std::ptr::null_mut(), 2) }
-            }
-
-            // Initialize the HID
-            #[cfg(hidapi)]
-            if unsafe { ffi::hid_init() } == -1 {
-                return Err(HidError::InitializationError);
-            }
-
-            #[cfg(all(target_os = "macos", feature = "macos-shared-device"))]
-            unsafe {
-                ffi::macos::hid_darwin_set_open_exclusive(0)
-            }
-
-            *init_state = InitState::Init {
-                enumerate: do_enumerate,
-            }
-        }
-        InitState::Init { enumerate } => {
-            if enumerate != do_enumerate {
-                panic!("Trying to initialize hidapi with enumeration={}, but it is already initialized with enumeration={}.", do_enumerate, enumerate)
-            }
-        }
-    }
-
-    Ok(())
-}
+static INIT_STATE: Mutex<InitState> = Mutex::new(InitState::Uninit {
+    device_discovery: true,
+});
 
 /// `hidapi` context.
 ///
@@ -183,38 +144,65 @@ pub struct HidApi {
 }
 
 impl HidApi {
-    /// Create a new hidapi context.
-    ///
-    /// Will also initialize the currently available device list.
-    ///
-    /// # Panics
-    ///
-    /// Panics if hidapi is already initialized in "without enumerate" mode
-    /// (i.e. if `new_without_enumerate()` has been called before).
-    pub fn new() -> HidResult<Self> {
-        lazy_init(true)?;
-
-        let mut api = HidApi {
-            device_list: Vec::with_capacity(8),
-        };
-        api.add_devices(0, 0)?;
-        Ok(api)
-    }
-
-    /// Create a new hidapi context, in "do not enumerate" mode.
+    /// Disable device discovery.
     ///
     /// This is needed on Android, where access to USB device enumeration is limited.
     ///
     /// # Panics
     ///
-    /// Panics if hidapi is already initialized in "do enumerate" mode
-    /// (i.e. if `new()` has been called before).
-    pub fn new_without_enumerate() -> HidResult<Self> {
-        lazy_init(false)?;
+    /// Panics if an hidapi context has already been initialized.
+    pub fn disable_device_discovery() {
+        if let InitState::Uninit { device_discovery } = &mut *INIT_STATE.lock().unwrap() {
+            *device_discovery = false;
+            return;
+        }
 
-        Ok(HidApi {
-            device_list: Vec::new(),
-        })
+        panic!("Cannot disable device discovery after HidApi has been initialized")
+    }
+
+    /// Create a new hidapi context.
+    ///
+    /// Will also initialize the currently available device list.
+    pub fn new() -> HidResult<Self> {
+        let mut init_state = INIT_STATE.lock().expect("HidApi context initialization");
+
+        let mut list_devices = true;
+        if let InitState::Uninit { device_discovery } = *init_state {
+            #[cfg(all(libusb, not(target_os = "freebsd")))]
+            if !device_discovery {
+                // Do not scan for devices in libusb_init()
+                // Must be set before calling it.
+                // This is needed on Android, where access to USB devices is limited
+                unsafe { ffi::libusb_set_option(std::ptr::null_mut(), 2) }
+            }
+
+            list_devices = device_discovery;
+
+            // Initialize the HID
+            #[cfg(hidapi)]
+            if unsafe { ffi::hid_init() } == -1 {
+                return Err(HidError::InitializationError);
+            }
+
+            #[cfg(all(target_os = "macos", feature = "macos-shared-device"))]
+            unsafe {
+                ffi::macos::hid_darwin_set_open_exclusive(0)
+            }
+
+            *init_state = InitState::Init;
+        }
+
+        if list_devices {
+            let mut api = Self {
+                device_list: Vec::with_capacity(8),
+            };
+            api.add_devices(0, 0)?;
+            Ok(api)
+        } else {
+            Ok(Self {
+                device_list: Vec::new(),
+            })
+        }
     }
 
     /// Refresh devices list and information about them (to access them use

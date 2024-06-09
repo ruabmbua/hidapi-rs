@@ -78,7 +78,7 @@ fn decode_buf(buf: Packet) -> CO2Result {
                 CO2Result::Concentration(val)
             }
         }
-        _ => CO2Result::Unknown(res[0], val),
+        _ => CO2Result::Unknown(kind, val),
     }
 }
 
@@ -113,7 +113,7 @@ fn main() -> Result<(), HidError> {
         match decode_buf(buf) {
             CO2Result::Temperature(val) => println!("Temp:\t{val}"),
             CO2Result::Concentration(val) => println!("Conc:\t{val}"),
-            CO2Result::Unknown(..) => (),
+            CO2Result::Unknown(kind, val) => eprintln!("Unknown({kind}):\t{val}"),
             CO2Result::Error(msg) => {
                 return Err(invalid_data_err(msg));
             }
