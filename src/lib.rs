@@ -472,6 +472,7 @@ trait HidDeviceBackendBase {
     #[cfg(hidapi)]
     fn check_error(&self) -> HidResult<HidError>;
     fn write(&self, data: &[u8]) -> HidResult<usize>;
+    fn send_output_report(&self, data: &[u8]) -> HidResult<usize>;
     fn read(&self, buf: &mut [u8]) -> HidResult<usize>;
     fn read_timeout(&self, buf: &mut [u8], timeout: i32) -> HidResult<usize>;
     fn send_feature_report(&self, data: &[u8]) -> HidResult<()>;
@@ -539,6 +540,21 @@ impl HidDevice {
     /// If successful, returns the actual number of bytes written.
     pub fn write(&self, data: &[u8]) -> HidResult<usize> {
         self.inner.write(data)
+    }
+
+    // Output reports are sent over the Control endpoint as a Set_Report
+    // transfer. The first byte of data[] must contain the Report ID.
+    // For devices which only support a single report, this must be set
+    // to 0x0. The remaining bytes contain the report data. Since the
+    // Report ID is mandatory, calls to hid_send_output_report() will
+    // always contain one more byte than the report contains. For example,
+    //  if a hid report is 16 bytes long, 17 bytes must be passed to
+    //  hid_send_output_report(): the Report ID (or 0x0, for devices
+    // which do not use numbered reports), followed by the report
+    // data (16 bytes). In this example, the length passed in
+    // would be 17.
+    pub fn send_output_report(&self, data: &[u8]) -> HidResult<usize> {
+        self.inner.send_output_report(data)
     }
 
     /// Read an Input report from a HID device.
