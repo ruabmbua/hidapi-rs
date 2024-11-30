@@ -44,6 +44,11 @@ extern "C" {
     pub fn hid_libusb_wrap_sys_device(sys_dev: intptr_t, interface_num: c_int) -> *mut HidDevice;
     #[cfg(all(libusb, not(target_os = "freebsd")))]
     pub fn libusb_set_option(ctx: *mut LibusbContext, option: c_int);
+    pub fn hid_send_output_report(
+        device: *mut HidDevice,
+        data: *const c_uchar,
+        length: size_t,
+    ) -> c_int;
     pub fn hid_write(device: *mut HidDevice, data: *const c_uchar, length: size_t) -> c_int;
     pub fn hid_read_timeout(
         device: *mut HidDevice,
