@@ -63,6 +63,11 @@ extern "C" {
         data: *mut c_uchar,
         length: size_t,
     ) -> c_int;
+    pub fn hid_send_output_report(
+        device: *mut HidDevice,
+        data: *const c_uchar,
+        length: size_t,
+    ) -> c_int;
     pub fn hid_close(device: *mut HidDevice);
     pub fn hid_get_manufacturer_string(
         device: *mut HidDevice,

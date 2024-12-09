@@ -251,6 +251,24 @@ impl HidDeviceBackendBase for HidDevice {
         self.check_size(res)
     }
 
+    fn send_output_report(&self, data: &[u8]) -> HidResult<()> {
+        if data.is_empty() {
+            return Err(HidError::InvalidZeroSizeData);
+        }
+        let res = unsafe {
+            ffi::hid_send_output_report(self._hid_device, data.as_ptr(), data.len() as size_t)
+        };
+        let res = self.check_size(res)?;
+        if res != data.len() {
+            Err(HidError::IncompleteSendError {
+                sent: res,
+                all: data.len(),
+            })
+        } else {
+            Ok(())
+        }
+    }
+
     fn set_blocking_mode(&self, blocking: bool) -> HidResult<()> {
         let res = unsafe {
             ffi::hid_set_nonblocking(self._hid_device, if blocking { 0i32 } else { 1i32 })

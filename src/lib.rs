@@ -476,6 +476,7 @@ trait HidDeviceBackendBase {
     fn read_timeout(&self, buf: &mut [u8], timeout: i32) -> HidResult<usize>;
     fn send_feature_report(&self, data: &[u8]) -> HidResult<()>;
     fn get_feature_report(&self, buf: &mut [u8]) -> HidResult<usize>;
+    fn send_output_report(&self, data: &[u8]) -> HidResult<()>;
     fn set_blocking_mode(&self, blocking: bool) -> HidResult<()>;
     fn get_device_info(&self) -> HidResult<DeviceInfo>;
     fn get_manufacturer_string(&self) -> HidResult<Option<String>>;
@@ -592,6 +593,23 @@ impl HidDevice {
     /// in the first byte).
     pub fn get_feature_report(&self, buf: &mut [u8]) -> HidResult<usize> {
         self.inner.get_feature_report(buf)
+    }
+
+    // Send a Output report to the device.
+    //
+    // Output reports are sent over the Control endpoint as a Set_Report
+    // transfer. The first byte of data[] must contain the Report ID.
+    // For devices which only support a single report, this must be set
+    // to 0x0. The remaining bytes contain the report data. Since the
+    // Report ID is mandatory, calls to hid_send_output_report() will
+    // always contain one more byte than the report contains. For example,
+    //  if a hid report is 16 bytes long, 17 bytes must be passed to
+    //  hid_send_output_report(): the Report ID (or 0x0, for devices
+    // which do not use numbered reports), followed by the report
+    // data (16 bytes). In this example, the length passed in
+    // would be 17.
+    pub fn send_output_report(&self, data: &[u8]) -> HidResult<()> {
+        self.inner.send_output_report(data)
     }
 
     /// Set the device handle to be in blocking or in non-blocking mode. In
