@@ -22,7 +22,9 @@ use nix::{
 };
 
 use super::{BusType, DeviceInfo, HidDeviceBackendBase, HidError, HidResult, WcharString};
-use ioctl::{hidraw_ioc_get_feature, hidraw_ioc_grdescsize, hidraw_ioc_set_feature};
+use ioctl::{
+    hidraw_ioc_get_feature, hidraw_ioc_grdescsize, hidraw_ioc_set_feature, hidraw_ioc_set_output,
+};
 
 // Bus values from linux/input.h
 const BUS_USB: u16 = 0x03;
@@ -554,6 +556,26 @@ impl HidDeviceBackendBase for HidDevice {
         };
 
         Ok(res)
+    }
+
+    fn send_output_report(&self, buf: &[u8]) -> HidResult<()> {
+        let res = match unsafe { hidraw_ioc_set_output(self.fd.as_raw_fd(), buf) } {
+            Ok(n) => n,
+            Err(e) => {
+                return Err(HidError::HidApiError {
+                    message: format!("ioctl (SOUTPUT): {e}"),
+                });
+            }
+        };
+
+        if res as usize != buf.len() {
+            return Err(HidError::IncompleteSendError {
+                sent: res as usize,
+                all: buf.len(),
+            });
+        }
+
+        Ok(())
     }
 
     fn set_blocking_mode(&self, blocking: bool) -> HidResult<()> {
