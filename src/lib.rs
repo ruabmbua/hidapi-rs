@@ -476,8 +476,13 @@ trait HidDeviceBackendBase {
     fn read_timeout(&self, buf: &mut [u8], timeout: i32) -> HidResult<usize>;
     fn send_feature_report(&self, data: &[u8]) -> HidResult<()>;
     fn get_feature_report(&self, buf: &mut [u8]) -> HidResult<usize>;
+
+    #[cfg(any(hidapi, feature = "linux-native"))]
     fn send_output_report(&self, data: &[u8]) -> HidResult<()>;
+
+    #[cfg(any(hidapi, feature = "linux-native"))]
     fn get_input_report(&self, data: &mut [u8]) -> HidResult<usize>;
+
     fn set_blocking_mode(&self, blocking: bool) -> HidResult<()>;
     fn get_device_info(&self) -> HidResult<DeviceInfo>;
     fn get_manufacturer_string(&self) -> HidResult<Option<String>>;
@@ -609,6 +614,7 @@ impl HidDevice {
     /// which do not use numbered reports), followed by the report
     /// data (16 bytes). In this example, the length passed in
     /// would be 17.
+    #[cfg(any(hidapi, feature = "linux-native"))]
     pub fn send_output_report(&self, data: &[u8]) -> HidResult<()> {
         self.inner.send_output_report(data)
     }
@@ -621,6 +627,7 @@ impl HidDevice {
     ///
     /// If successful, returns the number of bytes read plus one for the report ID (which is still
     /// in the first byte).
+    #[cfg(any(hidapi, feature = "linux-native"))]
     pub fn get_input_report(&self, data: &mut [u8]) -> HidResult<usize> {
         self.inner.get_input_report(data)
     }
