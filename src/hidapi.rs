@@ -269,6 +269,16 @@ impl HidDeviceBackendBase for HidDevice {
         }
     }
 
+    fn get_input_report(&self, data: &mut [u8]) -> HidResult<usize> {
+        if data.is_empty() {
+            return Err(HidError::InvalidZeroSizeData);
+        }
+        let res = unsafe {
+            ffi::hid_get_input_report(self._hid_device, data.as_mut_ptr(), data.len() as size_t)
+        };
+        self.check_size(res)
+    }
+
     fn set_blocking_mode(&self, blocking: bool) -> HidResult<()> {
         let res = unsafe {
             ffi::hid_set_nonblocking(self._hid_device, if blocking { 0i32 } else { 1i32 })

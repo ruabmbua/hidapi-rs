@@ -23,7 +23,8 @@ use nix::{
 
 use super::{BusType, DeviceInfo, HidDeviceBackendBase, HidError, HidResult, WcharString};
 use ioctl::{
-    hidraw_ioc_get_feature, hidraw_ioc_grdescsize, hidraw_ioc_set_feature, hidraw_ioc_set_output,
+    hidraw_ioc_get_feature, hidraw_ioc_get_input, hidraw_ioc_grdescsize, hidraw_ioc_set_feature,
+    hidraw_ioc_set_output,
 };
 
 // Bus values from linux/input.h
@@ -576,6 +577,15 @@ impl HidDeviceBackendBase for HidDevice {
         }
 
         Ok(())
+    }
+
+    fn get_input_report(&self, data: &mut [u8]) -> HidResult<usize> {
+        match unsafe { hidraw_ioc_get_input(self.fd.as_raw_fd(), data) } {
+            Ok(n) => Ok(n as usize),
+            Err(e) => Err(HidError::HidApiError {
+                message: format!("ioctl (GINPUT): {e}"),
+            }),
+        }
     }
 
     fn set_blocking_mode(&self, blocking: bool) -> HidResult<()> {
