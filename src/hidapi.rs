@@ -5,9 +5,12 @@ use std::{
     fmt::{self, Debug},
 };
 
+#[cfg(not(target_family = "wasm"))]
 use libc::{c_int, size_t, wchar_t};
 
-use crate::{ffi, DeviceInfo, HidDeviceBackendBase, HidError, HidResult, WcharString};
+#[cfg(not(target_family = "wasm"))]
+use crate::ffi;
+use crate::{DeviceInfo, HidDeviceBackendBase, HidError, HidResult, WcharString};
 
 #[cfg(target_os = "macos")]
 mod macos;
@@ -19,7 +22,7 @@ const STRING_BUF_LEN: usize = 128;
 pub struct HidApiBackend;
 
 impl HidApiBackend {
-    pub fn get_hid_device_info_vector(vid: u16, pid: u16) -> HidResult<Vec<DeviceInfo>> {
+    pub async fn get_hid_device_info_vector(vid: u16, pid: u16) -> HidResult<Vec<DeviceInfo>> {
         let mut device_vector = Vec::with_capacity(8);
 
         let enumeration = unsafe { ffi::hid_enumerate(vid, pid) };

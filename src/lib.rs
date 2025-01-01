@@ -61,9 +61,11 @@
 //! an opt-in that can be enabled with the `macos-shared-device` feature flag.
 
 mod error;
+#[cfg(not(target_family = "wasm"))]
 mod ffi;
 
 use cfg_if::cfg_if;
+#[cfg(not(target_family = "wasm"))]
 use libc::wchar_t;
 use std::ffi::CStr;
 use std::ffi::CString;
@@ -85,6 +87,9 @@ cfg_if! {
     } else if #[cfg(hidapi)] {
         mod hidapi;
         use hidapi::HidApiBackend;
+    } else if #[cfg(target_family="wasm")] {
+        mod webusb;
+        use webusb::HidApiBackend;
     } else {
         compile_error!("No backend selected");
     }
@@ -191,13 +196,13 @@ impl HidApi {
     ///
     /// Panics if hidapi is already initialized in "without enumerate" mode
     /// (i.e. if `new_without_enumerate()` has been called before).
-    pub fn new() -> HidResult<Self> {
+    pub async fn new() -> HidResult<Self> {
         lazy_init(true)?;
 
         let mut api = HidApi {
             device_list: Vec::with_capacity(8),
         };
-        api.add_devices(0, 0)?;
+        api.add_devices(0, 0).await?;
         Ok(api)
     }
 
@@ -220,9 +225,9 @@ impl HidApi {
     /// Refresh devices list and information about them (to access them use
     /// `device_list()` method)
     /// Identical to `reset_devices()` followed by `add_devices(0, 0)`.
-    pub fn refresh_devices(&mut self) -> HidResult<()> {
+    pub async fn refresh_devices(&mut self) -> HidResult<()> {
         self.reset_devices()?;
-        self.add_devices(0, 0)?;
+        self.add_devices(0, 0).await?;
         Ok(())
     }
 
@@ -234,9 +239,9 @@ impl HidApi {
 
     /// Indexes devices that match the given VID and PID filters.
     /// 0 indicates no filter.
-    pub fn add_devices(&mut self, vid: u16, pid: u16) -> HidResult<()> {
+    pub async fn add_devices(&mut self, vid: u16, pid: u16) -> HidResult<()> {
         self.device_list
-            .append(&mut HidApiBackend::get_hid_device_info_vector(vid, pid)?);
+            .append(&mut HidApiBackend::get_hid_device_info_vector(vid, pid).await?);
         Ok(())
     }
 
@@ -307,6 +312,7 @@ impl HidApi {
 enum WcharString {
     String(String),
     #[cfg_attr(all(feature = "linux-native", target_os = "linux"), allow(dead_code))]
+    #[cfg(not(target_family = "wasm"))]
     Raw(Vec<wchar_t>),
     None,
 }
@@ -374,6 +380,7 @@ impl DeviceInfo {
         }
     }
 
+    #[cfg(not(target_family = "wasm"))]
     pub fn serial_number_raw(&self) -> Option<&[wchar_t]> {
         match self.serial_number {
             WcharString::Raw(ref s) => Some(s),
@@ -393,6 +400,7 @@ impl DeviceInfo {
         }
     }
 
+    #[cfg(not(target_family = "wasm"))]
     pub fn manufacturer_string_raw(&self) -> Option<&[wchar_t]> {
         match self.manufacturer_string {
             WcharString::Raw(ref s) => Some(s),
@@ -408,6 +416,7 @@ impl DeviceInfo {
         }
     }
 
+    #[cfg(not(target_family = "wasm"))]
     pub fn product_string_raw(&self) -> Option<&[wchar_t]> {
         match self.product_string {
             WcharString::Raw(ref s) => Some(s),

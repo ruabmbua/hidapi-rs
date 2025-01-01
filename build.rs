@@ -23,6 +23,9 @@ extern crate pkg_config;
 use std::env;
 
 fn main() {
+    println!("cargo::rustc-check-cfg=cfg(hidapi)");
+    println!("cargo::rustc-check-cfg=cfg(libusb)");
+
     let target = env::var("TARGET").unwrap();
 
     if target.contains("linux") {
@@ -37,6 +40,8 @@ fn main() {
         compile_openbsd();
     } else if target.contains("illumos") {
         compile_illumos();
+    } else if target.contains("wasm") {
+        compile_wasm();
     } else {
         panic!("Unsupported target os for hidapi-rs");
     }
@@ -214,4 +219,8 @@ fn compile_macos() {
     println!("cargo:rustc-link-lib=framework=IOKit");
     println!("cargo:rustc-link-lib=framework=CoreFoundation");
     println!("cargo:rustc-link-lib=framework=AppKit")
+}
+
+fn compile_wasm() {
+    // println!("cargo:rustc-cfg=webhid");
 }
