@@ -60,7 +60,7 @@ impl HidApiBackend {
         open(vid, pid, None)
     }
 
-    pub fn open_serial(vid: u16, pid: u16, sn: &str) -> HidResult<HidDevice> {
+    pub async fn open_serial(vid: u16, pid: u16, sn: &str) -> HidResult<HidDevice> {
         open(vid, pid, Some(sn))
     }
 

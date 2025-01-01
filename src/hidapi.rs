@@ -55,7 +55,7 @@ impl HidApiBackend {
         }
     }
 
-    pub fn open_serial(vid: u16, pid: u16, sn: &str) -> HidResult<HidDevice> {
+    pub async fn open_serial(vid: u16, pid: u16, sn: &str) -> HidResult<HidDevice> {
         let mut chars = sn.chars().map(|c| c as wchar_t).collect::<Vec<_>>();
         chars.push(0 as wchar_t);
         let device = unsafe { ffi::hid_open(vid, pid, chars.as_ptr()) };
