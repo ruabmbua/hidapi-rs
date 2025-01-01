@@ -413,7 +413,8 @@ unsafe impl Send for HidDevice {}
 // API for the library to call us, or for internal uses
 impl HidDevice {
     pub(crate) fn open(vid: u16, pid: u16, sn: Option<&str>) -> HidResult<Self> {
-        for device in HidApiBackend::get_hid_device_info_vector(0, 0)?
+        for device in HidApiBackend::get_hid_device_info_vector(0, 0)
+            .await?
             .iter()
             .filter(|device| device.vendor_id == vid && device.product_id == pid)
         {
