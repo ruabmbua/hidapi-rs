@@ -33,7 +33,7 @@ const BUS_SPI: u16 = 0x1C;
 pub struct HidApiBackend;
 
 impl HidApiBackend {
-    pub fn get_hid_device_info_vector(vid: u16, pid: u16) -> HidResult<Vec<DeviceInfo>> {
+    pub async fn get_hid_device_info_vector(vid: u16, pid: u16) -> HidResult<Vec<DeviceInfo>> {
         // The C version assumes these can't fail, and they should only fail in case
         // of memory allocation issues, at which point maybe we should panic
         let mut enumerator = match udev::Enumerator::new() {

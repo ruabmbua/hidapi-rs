@@ -52,7 +52,7 @@ const STRING_BUF_LEN: usize = 128;
 
 pub struct HidApiBackend;
 impl HidApiBackend {
-    pub fn get_hid_device_info_vector(vid: u16, pid: u16) -> HidResult<Vec<DeviceInfo>> {
+    pub async fn get_hid_device_info_vector(vid: u16, pid: u16) -> HidResult<Vec<DeviceInfo>> {
         Ok(enumerate_devices(vid, pid)?)
     }
 
