@@ -44,16 +44,16 @@ impl HidApiBackend {
         Ok(result)
     }
 
-    pub fn open(vid: u16, pid: u16) -> HidResult<HidDevice> {
-        HidDevice::open(vid, pid, None)
+    pub async fn open(vid: u16, pid: u16) -> HidResult<HidDevice> {
+        HidDevice::open(vid, pid, None).await
     }
 
-    pub fn open_serial(vid: u16, pid: u16, sn: &str) -> HidResult<HidDevice> {
-        HidDevice::open(vid, pid, Some(sn))
+    pub async fn open_serial(vid: u16, pid: u16, sn: &str) -> HidResult<HidDevice> {
+        HidDevice::open(vid, pid, Some(sn)).await
     }
 
-    pub fn open_path(device_path: &CStr) -> HidResult<HidDevice> {
-        HidDevice::open_path(device_path)
+    pub async fn open_path(device_path: &CStr) -> HidResult<HidDevice> {
+        HidDevice::open_path(device_path).await
     }
 }
 
@@ -63,11 +63,11 @@ unsafe impl Send for HidDevice {}
 
 // API for the library to call us, or for internal uses
 impl HidDevice {
-    pub(crate) fn open(_vid: u16, _pid: u16, _sn: Option<&str>) -> HidResult<Self> {
+    pub(crate) async fn open(_vid: u16, _pid: u16, _sn: Option<&str>) -> HidResult<Self> {
         todo!()
     }
 
-    pub(crate) fn open_path(_device_path: &CStr) -> HidResult<HidDevice> {
+    pub(crate) async fn open_path(_device_path: &CStr) -> HidResult<HidDevice> {
         todo!()
     }
 

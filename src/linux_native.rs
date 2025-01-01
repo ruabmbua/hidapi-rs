@@ -56,12 +56,12 @@ impl HidApiBackend {
         Ok(devices)
     }
 
-    pub fn open(vid: u16, pid: u16) -> HidResult<HidDevice> {
-        HidDevice::open(vid, pid, None)
+    pub async fn open(vid: u16, pid: u16) -> HidResult<HidDevice> {
+        HidDevice::open(vid, pid, None).await
     }
 
-    pub fn open_serial(vid: u16, pid: u16, sn: &str) -> HidResult<HidDevice> {
-        HidDevice::open(vid, pid, Some(sn))
+    pub async fn open_serial(vid: u16, pid: u16, sn: &str) -> HidResult<HidDevice> {
+        HidDevice::open(vid, pid, Some(sn)).await
     }
 
     pub fn open_path(device_path: &CStr) -> HidResult<HidDevice> {
@@ -412,7 +412,7 @@ unsafe impl Send for HidDevice {}
 
 // API for the library to call us, or for internal uses
 impl HidDevice {
-    pub(crate) fn open(vid: u16, pid: u16, sn: Option<&str>) -> HidResult<Self> {
+    pub(crate) async fn open(vid: u16, pid: u16, sn: Option<&str>) -> HidResult<Self> {
         for device in HidApiBackend::get_hid_device_info_vector(0, 0)
             .await?
             .iter()
