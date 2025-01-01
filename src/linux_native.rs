@@ -64,8 +64,8 @@ impl HidApiBackend {
         HidDevice::open(vid, pid, Some(sn)).await
     }
 
-    pub fn open_path(device_path: &CStr) -> HidResult<HidDevice> {
-        HidDevice::open_path(device_path)
+    pub async fn open_path(device_path: &CStr) -> HidResult<HidDevice> {
+        HidDevice::open_path(device_path).await
     }
 }
 
@@ -419,9 +419,9 @@ impl HidDevice {
             .filter(|device| device.vendor_id == vid && device.product_id == pid)
         {
             match (sn, &device.serial_number) {
-                (None, _) => return Self::open_path(&device.path),
+                (None, _) => return Self::open_path(&device.path).await,
                 (Some(sn), WcharString::String(serial_number)) if sn == serial_number => {
-                    return Self::open_path(&device.path)
+                    return Self::open_path(&device.path).await
                 }
                 _ => continue,
             };
@@ -432,7 +432,7 @@ impl HidDevice {
         })
     }
 
-    pub(crate) fn open_path(device_path: &CStr) -> HidResult<HidDevice> {
+    pub(crate) async fn open_path(device_path: &CStr) -> HidResult<HidDevice> {
         // Paths on Linux can be anything but devnode paths are going to be ASCII
         let path = device_path.to_str().expect("path must be utf-8");
         let fd: OwnedFd = match OpenOptions::new()
