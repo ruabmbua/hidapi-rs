@@ -42,7 +42,7 @@ impl HidApiBackend {
         Ok(device_vector)
     }
 
-    pub fn open(vid: u16, pid: u16) -> HidResult<HidDevice> {
+    pub async fn open(vid: u16, pid: u16) -> HidResult<HidDevice> {
         let device = unsafe { ffi::hid_open(vid, pid, std::ptr::null()) };
 
         if device.is_null() {
@@ -69,7 +69,7 @@ impl HidApiBackend {
         }
     }
 
-    pub fn open_path(device_path: &CStr) -> HidResult<HidDevice> {
+    pub async fn open_path(device_path: &CStr) -> HidResult<HidDevice> {
         let device = unsafe { ffi::hid_open_path(device_path.as_ptr()) };
 
         if device.is_null() {
