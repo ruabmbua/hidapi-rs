@@ -1,8 +1,9 @@
 use core::cell::Ref;
 use core::ffi::CStr;
-use std::ffi::CString;
+use std::{ffi::CString, io::Error};
 
 use wasm_bindgen_futures::{js_sys::Array, wasm_bindgen::JsCast, JsFuture};
+use web_sys::{js_sys, Hid, Window};
 
 use crate::{DeviceInfo, HidDeviceBackendBase, HidResult};
 
@@ -10,9 +11,7 @@ pub struct HidApiBackend;
 
 impl HidApiBackend {
     pub async fn get_hid_device_info_vector(vid: u16, pid: u16) -> HidResult<Vec<DeviceInfo>> {
-        let window = web_sys::window().unwrap();
-        let navigator = window.navigator();
-        let hid = navigator.hid();
+        let hid = hid()?;
         let devices = JsFuture::from(hid.get_devices()).await.unwrap();
 
         let devices: Array = JsCast::unchecked_from_js(devices);
@@ -120,4 +119,21 @@ impl HidDeviceBackendBase for HidDevice {
     fn get_report_descriptor(&self, _buf: &mut [u8]) -> HidResult<usize> {
         todo!()
     }
+}
+
+pub(crate) fn hid() -> Result<Hid, Error> {
+    let window = js_sys::global().dyn_into::<Window>().ok();
+
+    if let Some(window) = window {
+        return Ok(window.navigator().hid());
+    }
+
+    // Currently HID does not work on WebWorkers
+    // let wgs = js_sys::global().dyn_into::<WorkerGlobalScope>().ok();
+
+    // if let Some(wgs) = wgs {
+    //     return Ok(wgs.navigator());
+    // }
+
+    Err(Error::other("WebUSB is not available on this platform"))
 }
