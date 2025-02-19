@@ -7,7 +7,7 @@ authors = [
     "Artyom Pavlov <newpavlov@gmail.com>",
     "mberndt123",
     "niklasad1",
-    "Stefan Kerkmann"
+    "Stefan Kerkmann",
 ]
 repository = "https://github.com/ruabmbua/hidapi-rs"
 description = "Rust-y wrapper around hidapi"
@@ -60,19 +60,38 @@ windows-native = [
     "windows-sys/Win32_Storage_FileSystem",
     "windows-sys/Win32_System_IO",
     "windows-sys/Win32_System_Threading",
-    "windows-sys/Win32_UI_Shell_PropertiesSystem"
+    "windows-sys/Win32_UI_Shell_PropertiesSystem",
 ]
 
 [dependencies]
-libc = "0.2"
 cfg-if = "1"
+tracing = "0.1"
 
 [target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
 udev = { version = "0.8", optional = true }
 nix = { version = "0.27", optional = true, features = ["fs", "ioctl", "poll"] }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+libc = "0.2"
+
+
 [target.'cfg(windows)'.dependencies]
+libc = "0.2"
 windows-sys = { version = "0.48", features = ["Win32_Foundation"] }
+
+[target.'cfg(target_family="wasm")'.dependencies]
+web-sys = { version = "*", features = [
+    "Document",
+    "Window",
+    "Navigator",
+    "Usb",
+    "UsbDevice",
+    "UsbDeviceRequestOptions",
+    "Hid",
+    "HidDevice",
+] }
+wasm-bindgen-futures = "*"
 
 [build-dependencies]
 cc = "1.0"

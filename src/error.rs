@@ -4,6 +4,7 @@
 // This file is part of hidapi-rs, based on hidapi-rs by Osspial
 // **************************************************************************
 
+#[cfg(not(target_family = "wasm"))]
 use libc::wchar_t;
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result};
@@ -16,6 +17,7 @@ pub enum HidError {
         message: String,
     },
     HidApiErrorEmpty,
+    #[cfg(not(target_family = "wasm"))]
     FromWideCharError {
         wide_char: wchar_t,
     },
@@ -42,6 +44,7 @@ impl Display for HidError {
         match self {
             HidError::HidApiError { message } => write!(f, "hidapi error: {}", message),
             HidError::HidApiErrorEmpty => write!(f, "hidapi error: (could not get error message)"),
+            #[cfg(not(target_family = "wasm"))]
             HidError::FromWideCharError { wide_char } => {
                 write!(f, "failed converting {:#X} to rust char", wide_char)
             }
