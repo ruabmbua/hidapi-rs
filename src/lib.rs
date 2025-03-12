@@ -264,7 +264,7 @@ impl HidApi {
         Ok(HidDevice::from_backend(Box::new(dev)))
     }
 
-    /// The path name be determined by inspecting the device list available with [HidApi::devices()](struct.HidApi.html#method.devices)
+    /// The path name be determined by inspecting the device list available with [`HidApi::device_list`].
     ///
     /// Alternatively a platform-specific path name can be used (eg: /dev/hidraw0 on Linux).
     pub fn open_path(&self, device_path: &CStr) -> HidResult<HidDevice> {
