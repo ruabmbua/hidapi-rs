@@ -39,7 +39,7 @@ const BUS_SPI: u16 = 0x1C;
 pub struct HidApiBackend;
 
 impl HidApiBackend {
-    pub fn get_hid_device_info_vector(vid: u16, pid: u16) -> HidResult<Vec<DeviceInfo>> {
+    pub async fn get_hid_device_info_vector(vid: u16, pid: u16) -> HidResult<Vec<DeviceInfo>> {
         // The C version assumes these can't fail, and they should only fail in case
         // of memory allocation issues, at which point maybe we should panic
         let mut enumerator = match udev::Enumerator::new() {
@@ -62,16 +62,16 @@ impl HidApiBackend {
         Ok(devices)
     }
 
-    pub fn open(vid: u16, pid: u16) -> HidResult<HidDevice> {
-        HidDevice::open(vid, pid, None)
+    pub async fn open(vid: u16, pid: u16) -> HidResult<HidDevice> {
+        HidDevice::open(vid, pid, None).await
     }
 
-    pub fn open_serial(vid: u16, pid: u16, sn: &str) -> HidResult<HidDevice> {
-        HidDevice::open(vid, pid, Some(sn))
+    pub async fn open_serial(vid: u16, pid: u16, sn: &str) -> HidResult<HidDevice> {
+        HidDevice::open(vid, pid, Some(sn)).await
     }
 
-    pub fn open_path(device_path: &CStr) -> HidResult<HidDevice> {
-        HidDevice::open_path(device_path)
+    pub async fn open_path(device_path: &CStr) -> HidResult<HidDevice> {
+        HidDevice::open_path(device_path).await
     }
 }
 
@@ -418,15 +418,16 @@ unsafe impl Send for HidDevice {}
 
 // API for the library to call us, or for internal uses
 impl HidDevice {
-    pub(crate) fn open(vid: u16, pid: u16, sn: Option<&str>) -> HidResult<Self> {
-        for device in HidApiBackend::get_hid_device_info_vector(0, 0)?
+    pub(crate) async fn open(vid: u16, pid: u16, sn: Option<&str>) -> HidResult<Self> {
+        for device in HidApiBackend::get_hid_device_info_vector(0, 0)
+            .await?
             .iter()
             .filter(|device| device.vendor_id == vid && device.product_id == pid)
         {
             match (sn, &device.serial_number) {
-                (None, _) => return Self::open_path(&device.path),
+                (None, _) => return Self::open_path(&device.path).await,
                 (Some(sn), WcharString::String(serial_number)) if sn == serial_number => {
-                    return Self::open_path(&device.path)
+                    return Self::open_path(&device.path).await
                 }
                 _ => continue,
             };
@@ -437,7 +438,7 @@ impl HidDevice {
         })
     }
 
-    pub(crate) fn open_path(device_path: &CStr) -> HidResult<HidDevice> {
+    pub(crate) async fn open_path(device_path: &CStr) -> HidResult<HidDevice> {
         // Paths on Linux can be anything but devnode paths are going to be ASCII
         let path = device_path.to_str().expect("path must be utf-8");
         let fd: OwnedFd = match OpenOptions::new()
