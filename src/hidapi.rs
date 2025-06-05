@@ -5,9 +5,12 @@ use std::{
     fmt::{self, Debug},
 };
 
+#[cfg(not(target_family = "wasm"))]
 use libc::{c_int, size_t, wchar_t};
 
-use crate::{ffi, DeviceInfo, HidDeviceBackendBase, HidError, HidResult, WcharString};
+#[cfg(not(target_family = "wasm"))]
+use crate::ffi;
+use crate::{DeviceInfo, HidDeviceBackendBase, HidError, HidResult, WcharString};
 
 #[cfg(target_os = "macos")]
 mod macos;
@@ -19,7 +22,7 @@ const STRING_BUF_LEN: usize = 128;
 pub struct HidApiBackend;
 
 impl HidApiBackend {
-    pub fn get_hid_device_info_vector(vid: u16, pid: u16) -> HidResult<Vec<DeviceInfo>> {
+    pub async fn get_hid_device_info_vector(vid: u16, pid: u16) -> HidResult<Vec<DeviceInfo>> {
         let mut device_vector = Vec::with_capacity(8);
 
         let enumeration = unsafe { ffi::hid_enumerate(vid, pid) };
@@ -39,7 +42,7 @@ impl HidApiBackend {
         Ok(device_vector)
     }
 
-    pub fn open(vid: u16, pid: u16) -> HidResult<HidDevice> {
+    pub async fn open(vid: u16, pid: u16) -> HidResult<HidDevice> {
         let device = unsafe { ffi::hid_open(vid, pid, std::ptr::null()) };
 
         if device.is_null() {
@@ -52,7 +55,7 @@ impl HidApiBackend {
         }
     }
 
-    pub fn open_serial(vid: u16, pid: u16, sn: &str) -> HidResult<HidDevice> {
+    pub async fn open_serial(vid: u16, pid: u16, sn: &str) -> HidResult<HidDevice> {
         let mut chars = sn.chars().map(|c| c as wchar_t).collect::<Vec<_>>();
         chars.push(0 as wchar_t);
         let device = unsafe { ffi::hid_open(vid, pid, chars.as_ptr()) };
@@ -66,7 +69,7 @@ impl HidApiBackend {
         }
     }
 
-    pub fn open_path(device_path: &CStr) -> HidResult<HidDevice> {
+    pub async fn open_path(device_path: &CStr) -> HidResult<HidDevice> {
         let device = unsafe { ffi::hid_open_path(device_path.as_ptr()) };
 
         if device.is_null() {
