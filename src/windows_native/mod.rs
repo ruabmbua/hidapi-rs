@@ -276,6 +276,40 @@ impl HidDeviceBackendBase for HidDevice {
         Ok(bytes_returned as usize)
     }
 
+    fn get_input_report(&self, buf: &mut [u8]) -> HidResult<usize> {
+        #[allow(clippy::identity_op, clippy::double_parens)]
+        const IOCTL_HID_GET_INPUT_REPORT: u32 = ((0x0000000b) << 16) | ((0) << 14) | ((104) << 2) | (2);
+        ensure!(!buf.is_empty(), Err(HidError::InvalidZeroSizeData));
+        let mut state = self.feature_state.borrow_mut();
+        let mut bytes_returned = 0;
+
+        let res = unsafe {
+            ResetEvent(state.overlapped.event_handle());
+            DeviceIoControl(
+                self.device_handle.as_raw(),
+                IOCTL_HID_GET_INPUT_REPORT,
+                buf.as_mut_ptr() as _,
+                buf.len() as u32,
+                buf.as_mut_ptr() as _,
+                buf.len() as u32,
+                &mut bytes_returned,
+                state.overlapped.as_raw(),
+            )
+        };
+        if res != TRUE {
+            let err = Win32Error::last();
+            ensure!(err == Win32Error::IoPending, Err(err.into()))
+        }
+
+        bytes_returned = state.overlapped.get_result(&self.device_handle, None)? as u32;
+
+        if buf[0] == 0x0 {
+            bytes_returned += 1;
+        }
+
+        Ok(bytes_returned as usize)
+    }
+
     fn send_output_report(&self, data: &[u8]) -> HidResult<()> {
         ensure!(!data.is_empty(), Err(HidError::InvalidZeroSizeData));
         let mut state = self.feature_state.borrow_mut();
