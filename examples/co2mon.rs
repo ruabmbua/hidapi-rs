@@ -45,7 +45,7 @@ fn decrypt(buf: Packet) -> Packet {
 
     let magic_word = b"Htemp99e";
     for i in 0..PACKET_SIZE {
-        let sub_val: u8 = (magic_word[i] << 4) | (magic_word[i] >> 4);
+        let sub_val: u8 = magic_word[i].rotate_right(4);
         res[i] = u8::wrapping_sub(res[i], sub_val);
     }
 
