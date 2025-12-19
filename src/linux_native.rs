@@ -85,14 +85,10 @@ fn device_to_hid_device_info(raw_device: &udev::Device) -> Option<Vec<DeviceInfo
         _ => return None,
     };
 
-    let (bus, vid, pid) = match device
+    let (bus, vid, pid) = device
         .property_value("HID_ID")
         .and_then(|s| s.to_str())
-        .and_then(parse_hid_vid_pid)
-    {
-        Some(t) => t,
-        None => return None,
-    };
+        .and_then(parse_hid_vid_pid)?;
     let bus_type = match bus {
         BUS_USB => BusType::Usb,
         BUS_BLUETOOTH => BusType::Bluetooth,
@@ -100,14 +96,8 @@ fn device_to_hid_device_info(raw_device: &udev::Device) -> Option<Vec<DeviceInfo
         BUS_SPI => BusType::Spi,
         _ => return None,
     };
-    let name = match device.property_value("HID_NAME") {
-        Some(name) => name,
-        None => return None,
-    };
-    let serial = match device.property_value("HID_UNIQ") {
-        Some(serial) => serial,
-        None => return None,
-    };
+    let name = device.property_value("HID_NAME")?;
+    let serial = device.property_value("HID_UNIQ")?;
     let path = match raw_device
         .devnode()
         .map(|p| p.as_os_str().to_os_string().into_vec())
@@ -244,10 +234,7 @@ impl<'a> Iterator for UsageIterator<'a> {
     type Item = (u16, u16);
 
     fn next(&mut self) -> Option<Self::Item> {
-        let (usage_page, page) = match next_hid_usage(&mut self.cursor, self.usage_page) {
-            Some(n) => n,
-            None => return None,
-        };
+        let (usage_page, page) = next_hid_usage(&mut self.cursor, self.usage_page)?;
 
         self.usage_page = usage_page;
         Some((usage_page, page))
@@ -267,10 +254,7 @@ fn next_hid_usage(cursor: &mut Cursor<&Vec<u8>>, mut usage_page: u16) -> Option<
         let position = cursor.position() - 1;
         let key_cmd = key & 0xfc;
 
-        let (data_len, key_size) = match hid_item_size(key, cursor) {
-            Some(v) => v,
-            None => return None,
-        };
+        let (data_len, key_size) = hid_item_size(key, cursor)?;
 
         match key_cmd {
             // Usage Page 6.2.2.7 (Global)
@@ -468,7 +452,7 @@ impl HidDevice {
         })
     }
 
-    fn info(&self) -> HidResult<Ref<DeviceInfo>> {
+    fn info(&self) -> HidResult<Ref<'_, DeviceInfo>> {
         if self.info.borrow().is_none() {
             let info = self.get_device_info()?;
             self.info.replace(Some(info));
@@ -480,7 +464,7 @@ impl HidDevice {
 }
 
 impl AsFd for HidDevice {
-    fn as_fd(&self) -> BorrowedFd {
+    fn as_fd(&self) -> BorrowedFd<'_> {
         self.fd.as_fd()
     }
 }
