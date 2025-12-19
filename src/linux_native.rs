@@ -17,6 +17,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use libc::wchar_t;
 use nix::{
     errno::Errno,
     poll::{poll, PollFd, PollFlags},
@@ -389,7 +390,24 @@ fn attribute_as_u16(dev: &udev::Device, attr: &str) -> Option<u16> {
 fn osstring_to_string(s: OsString) -> WcharString {
     match s.into_string() {
         Ok(s) => WcharString::String(s),
-        Err(_) => panic!("udev strings should always be utf8"),
+        Err(s) => {
+            // We have an array of u8s but wchar_t is i32 so we need to convert
+            // them. This comes from hidapi starting from wchar_t but we start
+            // from UTF-8 or whatever the OS or device gave us. We can at least
+            // try to copy as much valid Unicode as there might be in the string
+            let mut buf: Vec<wchar_t> = Vec::with_capacity(s.len());
+            for chunk in s.into_vec().utf8_chunks() {
+                // Each chunk contains first the valid portion and then invalid portion
+                for c in chunk.valid().chars() {
+                    buf.push(c as wchar_t);
+                }
+                for c in chunk.invalid() {
+                    buf.push(*c as wchar_t);
+                }
+            }
+
+            WcharString::Raw(buf)
+        }
     }
 }
 
@@ -667,5 +685,25 @@ mod test {
 
         let expected = vec![(1, 2), (1, 1), (1, 128), (12, 1), (65280, 14)];
         assert_eq!(expected, values);
+    }
+
+    #[test]
+    fn invalid_string_conversion() {
+        let good = OsStr::new("hello world").to_os_string();
+        assert!(matches!(osstring_to_string(good), WcharString::String(s) if s == "hello world"));
+
+        // Value found in the field that made us panic
+        let bad_bytes: Vec<u8> = vec![0xD6, 0x34, 0x25, 0xB9, 0x04, 0x1c, 0xA4, 0xFD];
+        let bad_chars = bad_bytes.iter().map(|c| *c as wchar_t).collect::<Vec<_>>();
+        let bad = OsString::from_vec(bad_bytes);
+        assert!(matches!(osstring_to_string(bad), WcharString::Raw(v) if v == bad_chars));
+
+        // Check that we do convert Unicode chars into wchar_t rather than their
+        // bytes when we deal with a partially valid Unicode string.
+        let mut crab_vec = OsStr::new("🦀").to_os_string().into_encoded_bytes();
+        crab_vec.push(0xD6_u8);
+        let crab = unsafe { OsString::from_encoded_bytes_unchecked(crab_vec) };
+        let crab_wchar: Vec<wchar_t> = vec![0x1F980, 0xD6];
+        assert!(matches!(osstring_to_string(crab), WcharString::Raw(v) if v == crab_wchar));
     }
 }
