@@ -8,10 +8,7 @@ fn main() {
             for device in api.device_list() {
                 println!(
                     "  {} (Interface {}):",
-                    match device.product_string() {
-                        Some(s) => s,
-                        _ => "<COULD NOT FETCH>",
-                    },
+                    device.product_string().unwrap_or("<COULD NOT FETCH>"),
                     device.interface_number()
                 );
                 let mut descriptor = vec![0u8; 2048];

@@ -20,14 +20,8 @@ fn main() {
                     "VID: {:04x}, PID: {:04x}, Serial: {}, Product name: {}, Interface: {}",
                     device.vendor_id(),
                     device.product_id(),
-                    match device.serial_number() {
-                        Some(s) => s,
-                        _ => "<COULD NOT FETCH>",
-                    },
-                    match device.product_string() {
-                        Some(s) => s,
-                        _ => "<COULD NOT FETCH>",
-                    },
+                    device.serial_number().unwrap_or("<COULD NOT FETCH>"),
+                    device.product_string().unwrap_or("<COULD NOT FETCH>"),
                     device.interface_number()
                 );
             }
