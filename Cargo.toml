@@ -50,6 +50,7 @@ linux-shared-libusb = []
 linux-shared-hidraw = []
 linux-native = ["dep:udev", "dep:nix"]
 linux-native-async = ["linux-native", "async", "dep:async-io"]
+linux-native-tokio = ["linux-native", "async", "dep:tokio"]
 linux-native-basic-udev = ["dep:basic-udev", "dep:nix"]
 illumos-static-libusb = []
 illumos-shared-libusb = []
@@ -71,6 +72,7 @@ libc = "0.2"
 cfg-if = "1"
 futures = { version = "0.3", optional = true }
 async-io = { version = "2", optional = true }
+tokio = { version = "1", optional = true, features = ["net"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 udev = { version = "0.8", optional = true }

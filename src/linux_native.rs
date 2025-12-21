@@ -25,6 +25,8 @@ use async_io::Async;
 use futures::task::{Context, Poll};
 #[cfg(feature = "async")]
 use std::task::ready;
+#[cfg(feature = "linux-native-tokio")]
+use tokio::io::unix::AsyncFd;
 
 use cfg_if::cfg_if;
 
@@ -426,6 +428,8 @@ pub struct HidDevice {
     fd: OwnedFd,
     #[cfg(feature = "linux-native-async")]
     fd: Async<OwnedFd>,
+    #[cfg(feature = "linux-native-tokio")]
+    fd: AsyncFd<OwnedFd>,
     info: RefCell<Option<DeviceInfo>>,
 }
 
@@ -479,6 +483,13 @@ impl HidDevice {
         cfg_if! {
             if #[cfg(feature = "linux-native-async")] {
                 let fd = Async::new_nonblocking(fd)?;
+                Ok(Self {
+                    blocking: Cell::new(true),
+                    fd,
+                    info: RefCell::new(None),
+                })
+            } else if #[cfg(feature = "linux-native-tokio")] {
+                let fd = AsyncFd::new(fd)?;
                 Ok(Self {
                     blocking: Cell::new(true),
                     fd,
@@ -688,6 +699,33 @@ impl super::HidDeviceBackendBaseAsync for HidDevice {
                 res => return Poll::Ready(res).map_err(|e| e.into()),
             }
             let _ = ready!(self.fd.poll_readable(cx));
+        }
+    }
+}
+
+#[cfg(feature = "linux-native-tokio")]
+impl super::HidDeviceBackendBaseAsync for HidDevice {
+    fn poll_write(&mut self, cx: &mut Context<'_>, buf: &[u8]) -> Poll<HidResult<usize>> {
+        if buf.is_empty() {
+            return Poll::Ready(Err(HidError::InvalidZeroSizeData));
+        }
+
+        loop {
+            let mut guard = ready!(self.fd.poll_write_ready(cx))?;
+            match write(self.fd.as_raw_fd(), buf) {
+                Err(Errno::EWOULDBLOCK) => guard.clear_ready(),
+                res => return Poll::Ready(res).map_err(|e| e.into()),
+            }
+        }
+    }
+
+    fn poll_read(&self, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<HidResult<usize>> {
+        loop {
+            let mut guard = ready!(self.fd.poll_read_ready(cx))?;
+            match read(self.fd.as_raw_fd(), buf) {
+                Err(Errno::EWOULDBLOCK) => guard.clear_ready(),
+                res => return Poll::Ready(res).map_err(|e| e.into()),
+            }
         }
     }
 }

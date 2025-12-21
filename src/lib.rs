@@ -45,6 +45,7 @@
 //! - `linux-shared-hidraw`: uses dynamically linked `hidraw` backend on Linux
 //! - `linux-native`: talks to hidraw directly without using the `hidapi` C library
 //! - `linux-native-async`: like `linux-native` but additionally enables `async-io`-backed async
+//! - `linux-native-tokio`: like `linux-native` but additionally enables `tokio`-backed async
 //! - `illumos-static-libusb`: uses statically linked `libusb` backend on Illumos (default)
 //! - `illumos-shared-libusb`: uses statically linked `hidraw` backend on Illumos
 //! - `macos-shared-device`: enables shared access to HID devices on MacOS
