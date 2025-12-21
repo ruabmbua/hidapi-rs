@@ -39,6 +39,7 @@
 //!
 //! # Feature flags
 //!
+//! - `async`: enable the async functions (must be paired with a supported backend)
 //! - `linux-static-libusb`: uses statically linked `libusb` backend on Linux
 //! - `linux-static-hidraw`: uses statically linked `hidraw` backend on Linux (default)
 //! - `linux-shared-libusb`: uses dynamically linked `libusb` backend on Linux
@@ -65,12 +66,20 @@ mod error;
 mod ffi;
 
 use cfg_if::cfg_if;
+
+// Catch async being enabled with an unsupported backend
+#[cfg(all(feature = "async", not(feature = "linux-native")))]
+compile_error!("async is only supported for some backends");
+
 use libc::wchar_t;
 use std::ffi::CStr;
 use std::ffi::CString;
 use std::fmt;
 use std::fmt::Debug;
 use std::sync::Mutex;
+
+#[cfg(feature = "async")]
+use futures::task::{Context, Poll};
 
 pub use error::HidError;
 
@@ -490,6 +499,10 @@ trait HidDeviceBackendBase {
     fn write(&self, data: &[u8]) -> HidResult<usize>;
     fn read(&self, buf: &mut [u8]) -> HidResult<usize>;
     fn read_timeout(&self, buf: &mut [u8], timeout: i32) -> HidResult<usize>;
+    #[cfg(feature = "async")]
+    fn poll_write(&mut self, cx: &mut Context<'_>, buf: &[u8]) -> Poll<HidResult<usize>>;
+    #[cfg(feature = "async")]
+    fn poll_read(&self, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<HidResult<usize>>;
     fn send_feature_report(&self, data: &[u8]) -> HidResult<()>;
     fn get_feature_report(&self, buf: &mut [u8]) -> HidResult<usize>;
     fn send_output_report(&self, data: &[u8]) -> HidResult<()>;
@@ -683,5 +696,24 @@ impl HidDevice {
     /// Get [`DeviceInfo`] from a HID device.
     pub fn get_device_info(&self) -> HidResult<DeviceInfo> {
         self.inner.get_device_info()
+    }
+}
+
+#[cfg(feature = "async")]
+impl HidDevice {
+    /// Write asynchronously to the device.
+    ///
+    /// See [`write`][`Self::write`] for more information.
+    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
+    pub async fn async_write(&mut self, buf: &[u8]) -> HidResult<usize> {
+        futures::future::poll_fn(|cx| self.inner.poll_write(cx, buf)).await
+    }
+
+    /// Read asynchronously from the device
+    ///
+    /// See [`read`][`Self::read`] for more information.
+    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
+    pub async fn async_read(&self, buf: &mut [u8]) -> HidResult<usize> {
+        futures::future::poll_fn(|cx| self.inner.poll_read(cx, buf)).await
     }
 }

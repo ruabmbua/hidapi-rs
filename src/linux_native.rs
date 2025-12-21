@@ -18,6 +18,10 @@ use std::{
 };
 
 use libc::wchar_t;
+
+#[cfg(feature = "async")]
+use futures::task::{Context, Poll};
+
 use nix::{
     errno::Errno,
     poll::{poll, PollFd, PollFlags},
@@ -525,6 +529,16 @@ impl HidDeviceBackendBase for HidDevice {
             Err(Errno::EAGAIN) | Err(Errno::EINPROGRESS) => Ok(0),
             Err(e) => Err(e.into()),
         }
+    }
+
+    #[cfg(feature = "async")]
+    fn poll_write(&mut self, cx: &mut Context<'_>, buf: &[u8]) -> Poll<HidResult<usize>> {
+        todo!();
+    }
+
+    #[cfg(feature = "async")]
+    fn poll_read(&self, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<HidResult<usize>> {
+        todo!();
     }
 
     fn send_feature_report(&self, data: &[u8]) -> HidResult<()> {

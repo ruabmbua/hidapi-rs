@@ -43,6 +43,7 @@ include = [
 
 [features]
 default = ["linux-static-hidraw", "illumos-static-libusb"]
+async = ["dep:futures"]
 linux-static-libusb = []
 linux-static-hidraw = []
 linux-shared-libusb = []
@@ -67,6 +68,7 @@ windows-native = [
 [dependencies]
 libc = "0.2"
 cfg-if = "1"
+futures = { version = "0.3", optional = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 udev = { version = "0.8", optional = true }
