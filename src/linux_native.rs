@@ -551,32 +551,6 @@ impl HidDeviceBackendBase for HidDevice {
         }
     }
 
-    #[cfg(feature = "async")]
-    fn poll_write(&mut self, cx: &mut Context<'_>, buf: &[u8]) -> Poll<HidResult<usize>> {
-        if buf.is_empty() {
-            return Poll::Ready(Err(HidError::InvalidZeroSizeData));
-        }
-
-        loop {
-            match write(self.fd.as_raw_fd(), buf) {
-                Err(Errno::EWOULDBLOCK) => {}
-                res => return Poll::Ready(res).map_err(|e| e.into()),
-            }
-            let _ = ready!(self.fd.poll_writable(cx));
-        }
-    }
-
-    #[cfg(feature = "async")]
-    fn poll_read(&self, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<HidResult<usize>> {
-        loop {
-            match read(self.fd.as_raw_fd(), buf) {
-                Err(Errno::EWOULDBLOCK) => {}
-                res => return Poll::Ready(res).map_err(|e| e.into()),
-            }
-            let _ = ready!(self.fd.poll_readable(cx));
-        }
-    }
-
     fn send_feature_report(&self, data: &[u8]) -> HidResult<()> {
         if data.is_empty() {
             return Err(HidError::InvalidZeroSizeData);
@@ -688,6 +662,33 @@ impl HidDeviceBackendBase for HidDevice {
         let min_size = buf.len().min(descriptor.0.len());
         buf[..min_size].copy_from_slice(&descriptor.0[..min_size]);
         Ok(min_size)
+    }
+}
+
+#[cfg(feature = "linux-native-async")]
+impl super::HidDeviceBackendBaseAsync for HidDevice {
+    fn poll_write(&mut self, cx: &mut Context<'_>, buf: &[u8]) -> Poll<HidResult<usize>> {
+        if buf.is_empty() {
+            return Poll::Ready(Err(HidError::InvalidZeroSizeData));
+        }
+
+        loop {
+            match write(self.fd.as_raw_fd(), buf) {
+                Err(Errno::EWOULDBLOCK) => {}
+                res => return Poll::Ready(res).map_err(|e| e.into()),
+            }
+            let _ = ready!(self.fd.poll_writable(cx));
+        }
+    }
+
+    fn poll_read(&self, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<HidResult<usize>> {
+        loop {
+            match read(self.fd.as_raw_fd(), buf) {
+                Err(Errno::EWOULDBLOCK) => {}
+                res => return Poll::Ready(res).map_err(|e| e.into()),
+            }
+            let _ = ready!(self.fd.poll_readable(cx));
+        }
     }
 }
 

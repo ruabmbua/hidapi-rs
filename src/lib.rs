@@ -101,6 +101,8 @@ cfg_if! {
 }
 
 // Automatically implement the top trait
+//
+// In this block we set up what the trait should be for the sync version
 cfg_if! {
     if #[cfg(target_os = "windows")] {
         #[cfg_attr(docsrs, doc(cfg(target_os = "windows")))]
@@ -111,8 +113,8 @@ cfg_if! {
             /// Get the container ID for a HID device
             fn get_container_id(&self) -> HidResult<GUID>;
         }
-        trait HidDeviceBackend: HidDeviceBackendBase + HidDeviceBackendWindows + Send {}
-        impl<T> HidDeviceBackend for T where T: HidDeviceBackendBase + HidDeviceBackendWindows + Send {}
+        trait HidDeviceBackendSync: HidDeviceBackendBase + HidDeviceBackendWindows + Send {}
+        impl<T> HidDeviceBackendSync for T where T: HidDeviceBackendBase + HidDeviceBackendWindows + Send {}
     } else if #[cfg(target_os = "macos")] {
         #[cfg_attr(docsrs, doc(cfg(target_os = "macos")))]
         mod macos;
@@ -124,11 +126,24 @@ cfg_if! {
             /// Check if the device was opened in exclusive mode.
             fn is_open_exclusive(&self) -> HidResult<bool>;
         }
-        trait HidDeviceBackend: HidDeviceBackendBase + HidDeviceBackendMacos + Send {}
-        impl<T> HidDeviceBackend for T where T: HidDeviceBackendBase + HidDeviceBackendMacos + Send {}
+        trait HidDeviceBackendSync: HidDeviceBackendBase + HidDeviceBackendMacos + Send {}
+        impl<T> HidDeviceBackendSync for T where T: HidDeviceBackendBase + HidDeviceBackendMacos + Send {}
     } else {
-        trait HidDeviceBackend: HidDeviceBackendBase + Send {}
-        impl<T> HidDeviceBackend for T where T: HidDeviceBackendBase + Send {}
+            trait HidDeviceBackendSync: HidDeviceBackendBase + Send {}
+            impl<T> HidDeviceBackendSync for T where T: HidDeviceBackendBase + Send {}
+    }
+}
+
+// Automatically implement the top trait
+//
+// In this block we set up whether the top-level trait should include the async trait
+cfg_if! {
+    if #[cfg(feature = "async")] {
+        trait HidDeviceBackend: HidDeviceBackendSync + HidDeviceBackendBaseAsync {}
+        impl<T> HidDeviceBackend for T where T: HidDeviceBackendSync + HidDeviceBackendBaseAsync {}
+    } else {
+        trait HidDeviceBackend: HidDeviceBackendSync {}
+        impl<T> HidDeviceBackend for T where T: HidDeviceBackendSync {}
     }
 }
 
@@ -499,10 +514,6 @@ trait HidDeviceBackendBase {
     fn write(&self, data: &[u8]) -> HidResult<usize>;
     fn read(&self, buf: &mut [u8]) -> HidResult<usize>;
     fn read_timeout(&self, buf: &mut [u8], timeout: i32) -> HidResult<usize>;
-    #[cfg(feature = "async")]
-    fn poll_write(&mut self, cx: &mut Context<'_>, buf: &[u8]) -> Poll<HidResult<usize>>;
-    #[cfg(feature = "async")]
-    fn poll_read(&self, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<HidResult<usize>>;
     fn send_feature_report(&self, data: &[u8]) -> HidResult<()>;
     fn get_feature_report(&self, buf: &mut [u8]) -> HidResult<usize>;
     fn send_output_report(&self, data: &[u8]) -> HidResult<()>;
@@ -520,6 +531,13 @@ trait HidDeviceBackendBase {
             message: "get_indexed_string: not supported".to_string(),
         })
     }
+}
+
+/// Trait which the different backends must implement if they support async code
+#[cfg(feature = "async")]
+trait HidDeviceBackendBaseAsync {
+    fn poll_write(&mut self, cx: &mut Context<'_>, buf: &[u8]) -> Poll<HidResult<usize>>;
+    fn poll_read(&self, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<HidResult<usize>>;
 }
 
 pub struct HidDevice {
