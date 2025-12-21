@@ -19,8 +19,14 @@ use std::{
 
 use libc::wchar_t;
 
+#[cfg(feature = "linux-native-async")]
+use async_io::Async;
 #[cfg(feature = "async")]
 use futures::task::{Context, Poll};
+#[cfg(feature = "async")]
+use std::task::ready;
+
+use cfg_if::cfg_if;
 
 use nix::{
     errno::Errno,
@@ -416,7 +422,10 @@ fn parse_hid_vid_pid(s: &str) -> Option<(u16, u16, u16)> {
 /// Object for accessing the HID device
 pub struct HidDevice {
     blocking: Cell<bool>,
+    #[cfg(not(feature = "async"))]
     fd: OwnedFd,
+    #[cfg(feature = "linux-native-async")]
+    fd: Async<OwnedFd>,
     info: RefCell<Option<DeviceInfo>>,
 }
 
@@ -467,11 +476,22 @@ impl HidDevice {
             });
         }
 
-        Ok(Self {
-            blocking: Cell::new(true),
-            fd,
-            info: RefCell::new(None),
-        })
+        cfg_if! {
+            if #[cfg(feature = "linux-native-async")] {
+                let fd = Async::new_nonblocking(fd)?;
+                Ok(Self {
+                    blocking: Cell::new(true),
+                    fd,
+                    info: RefCell::new(None),
+                })
+            } else {
+                Ok(Self {
+                    blocking: Cell::new(true),
+                    fd,
+                    info: RefCell::new(None),
+                })
+            }
+        }
     }
 
     fn info(&self) -> HidResult<Ref<'_, DeviceInfo>> {
@@ -533,12 +553,28 @@ impl HidDeviceBackendBase for HidDevice {
 
     #[cfg(feature = "async")]
     fn poll_write(&mut self, cx: &mut Context<'_>, buf: &[u8]) -> Poll<HidResult<usize>> {
-        todo!();
+        if buf.is_empty() {
+            return Poll::Ready(Err(HidError::InvalidZeroSizeData));
+        }
+
+        loop {
+            match write(self.fd.as_raw_fd(), buf) {
+                Err(Errno::EWOULDBLOCK) => {}
+                res => return Poll::Ready(res).map_err(|e| e.into()),
+            }
+            let _ = ready!(self.fd.poll_writable(cx));
+        }
     }
 
     #[cfg(feature = "async")]
     fn poll_read(&self, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<HidResult<usize>> {
-        todo!();
+        loop {
+            match read(self.fd.as_raw_fd(), buf) {
+                Err(Errno::EWOULDBLOCK) => {}
+                res => return Poll::Ready(res).map_err(|e| e.into()),
+            }
+            let _ = ready!(self.fd.poll_readable(cx));
+        }
     }
 
     fn send_feature_report(&self, data: &[u8]) -> HidResult<()> {
