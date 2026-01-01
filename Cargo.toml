@@ -48,8 +48,6 @@ linux-static-hidraw = []
 linux-shared-libusb = []
 linux-shared-hidraw = []
 linux-native = ["dep:udev", "dep:nix"]
-linux-native-async = ["linux-native", "__async", "dep:async-io"]
-linux-native-tokio = ["linux-native", "__async", "dep:tokio"]
 linux-native-basic-udev = ["dep:basic-udev", "dep:nix"]
 illumos-static-libusb = []
 illumos-shared-libusb = []
@@ -65,6 +63,12 @@ windows-native = [
     "windows-sys/Win32_System_Threading",
     "windows-sys/Win32_UI_Shell_PropertiesSystem"
 ]
+
+# Enable async via the async-io crate
+async-io = ["__async", "dep:async-io"]
+
+#Enable async via the tokio crate
+tokio = ["__async", "dep:tokio"]
 
 # Enables some common code to do with async
 __async = ["dep:futures"]

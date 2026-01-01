@@ -19,13 +19,13 @@ use std::{
 
 use libc::wchar_t;
 
-#[cfg(feature = "linux-native-async")]
+#[cfg(feature = "async-io")]
 use async_io::Async;
 #[cfg(feature = "__async")]
 use futures::task::{Context, Poll};
 #[cfg(feature = "__async")]
 use std::task::ready;
-#[cfg(feature = "linux-native-tokio")]
+#[cfg(feature = "tokio")]
 use tokio::io::unix::AsyncFd;
 
 use cfg_if::cfg_if;
@@ -426,9 +426,9 @@ pub struct HidDevice {
     blocking: Cell<bool>,
     #[cfg(not(feature = "__async"))]
     fd: OwnedFd,
-    #[cfg(feature = "linux-native-async")]
+    #[cfg(feature = "async-io")]
     fd: Async<OwnedFd>,
-    #[cfg(feature = "linux-native-tokio")]
+    #[cfg(feature = "tokio")]
     fd: AsyncFd<OwnedFd>,
     info: RefCell<Option<DeviceInfo>>,
 }
@@ -481,14 +481,14 @@ impl HidDevice {
         }
 
         cfg_if! {
-            if #[cfg(feature = "linux-native-async")] {
+            if #[cfg(feature = "async-io")] {
                 let fd = Async::new_nonblocking(fd)?;
                 Ok(Self {
                     blocking: Cell::new(true),
                     fd,
                     info: RefCell::new(None),
                 })
-            } else if #[cfg(feature = "linux-native-tokio")] {
+            } else if #[cfg(feature = "tokio")] {
                 let fd = AsyncFd::new(fd)?;
                 Ok(Self {
                     blocking: Cell::new(true),
@@ -676,7 +676,7 @@ impl HidDeviceBackendBase for HidDevice {
     }
 }
 
-#[cfg(feature = "linux-native-async")]
+#[cfg(feature = "async-io")]
 impl super::HidDeviceBackendBaseAsync for HidDevice {
     fn poll_write(&mut self, cx: &mut Context<'_>, buf: &[u8]) -> Poll<HidResult<usize>> {
         if buf.is_empty() {
@@ -703,7 +703,7 @@ impl super::HidDeviceBackendBaseAsync for HidDevice {
     }
 }
 
-#[cfg(feature = "linux-native-tokio")]
+#[cfg(feature = "tokio")]
 impl super::HidDeviceBackendBaseAsync for HidDevice {
     fn poll_write(&mut self, cx: &mut Context<'_>, buf: &[u8]) -> Poll<HidResult<usize>> {
         if buf.is_empty() {

@@ -74,11 +74,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        features:
+        backend:
           - linux-native
           - linux-native-basic-udev
-          - linux-native-async
-          - linux-native-tokio
+        async:
+          - ''
+          - async-io
+          - tokio
     steps:
       - name: Checkout repository and submodules
         uses: actions/checkout@v4
@@ -91,11 +93,11 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
       - name: Build
-        run: cargo build --no-default-features --features ${{ matrix.features }} --verbose
+        run: cargo build --no-default-features --features ${{ matrix.backend }},${{ matrix.async }} --verbose
       - name: Run tests
-        run: cargo test --no-default-features --features ${{ matrix.features }} --verbose
+        run: cargo test --no-default-features --features ${{ matrix.backend }},${{ matrix.async }} --verbose
       - name: Verify package
-        run: cargo package --no-default-features --features ${{ matrix.features }} --verbose
+        run: cargo package --no-default-features --features ${{ matrix.backend }},${{ matrix.async }} --verbose
 
   build-windows:
     runs-on: windows-latest
