@@ -71,6 +71,14 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DEBIAN_FRONTEND: noninteractive
+    strategy:
+      fail-fast: false
+      matrix:
+        features:
+          - linux-native
+          - linux-native-basic-udev
+          - linux-native-async
+          - linux-native-tokio
     steps:
       - name: Checkout repository and submodules
         uses: actions/checkout@v4
@@ -83,33 +91,11 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
       - name: Build
-        run: cargo build --no-default-features --features linux-native --verbose
+        run: cargo build --no-default-features --features ${{ matrix.features }} --verbose
       - name: Run tests
-        run: cargo test --no-default-features --features linux-native --verbose
+        run: cargo test --no-default-features --features ${{ matrix.features }} --verbose
       - name: Verify package
-        run: cargo package --no-default-features --features linux-native --verbose
-
-  build-linux-native-basic-udev:
-    runs-on: ubuntu-latest
-    env:
-      DEBIAN_FRONTEND: noninteractive
-    steps:
-      - name: Checkout repository and submodules
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-      - name: Install dependencies
-        run: |
-          sudo apt-get update -y
-          sudo apt-get install -y libudev-dev
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-      - name: Build
-        run: cargo build --no-default-features --features linux-native-basic-udev --verbose
-      - name: Run tests
-        run: cargo test --no-default-features --features linux-native-basic-udev --verbose
-      - name: Verify package
-        run: cargo package --no-default-features --features linux-native-basic-udev --verbose
+        run: cargo package --no-default-features --features ${{ matrix.features }} --verbose
 
   build-windows:
     runs-on: windows-latest
