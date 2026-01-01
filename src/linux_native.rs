@@ -21,9 +21,9 @@ use libc::wchar_t;
 
 #[cfg(feature = "linux-native-async")]
 use async_io::Async;
-#[cfg(feature = "async")]
+#[cfg(feature = "__async")]
 use futures::task::{Context, Poll};
-#[cfg(feature = "async")]
+#[cfg(feature = "__async")]
 use std::task::ready;
 #[cfg(feature = "linux-native-tokio")]
 use tokio::io::unix::AsyncFd;
@@ -424,7 +424,7 @@ fn parse_hid_vid_pid(s: &str) -> Option<(u16, u16, u16)> {
 /// Object for accessing the HID device
 pub struct HidDevice {
     blocking: Cell<bool>,
-    #[cfg(not(feature = "async"))]
+    #[cfg(not(feature = "__async"))]
     fd: OwnedFd,
     #[cfg(feature = "linux-native-async")]
     fd: Async<OwnedFd>,

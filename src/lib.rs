@@ -69,7 +69,7 @@ mod ffi;
 use cfg_if::cfg_if;
 
 // Catch async being enabled with an unsupported backend
-#[cfg(all(feature = "async", not(feature = "linux-native")))]
+#[cfg(all(feature = "__async", not(feature = "linux-native")))]
 compile_error!("async is only supported for some backends");
 
 use libc::wchar_t;
@@ -79,7 +79,7 @@ use std::fmt;
 use std::fmt::Debug;
 use std::sync::Mutex;
 
-#[cfg(feature = "async")]
+#[cfg(feature = "__async")]
 use futures::task::{Context, Poll};
 
 pub use error::HidError;
@@ -139,7 +139,7 @@ cfg_if! {
 //
 // In this block we set up whether the top-level trait should include the async trait
 cfg_if! {
-    if #[cfg(feature = "async")] {
+    if #[cfg(feature = "__async")] {
         trait HidDeviceBackend: HidDeviceBackendSync + HidDeviceBackendBaseAsync {}
         impl<T> HidDeviceBackend for T where T: HidDeviceBackendSync + HidDeviceBackendBaseAsync {}
     } else {
@@ -535,7 +535,7 @@ trait HidDeviceBackendBase {
 }
 
 /// Trait which the different backends must implement if they support async code
-#[cfg(feature = "async")]
+#[cfg(feature = "__async")]
 trait HidDeviceBackendBaseAsync {
     fn poll_write(&mut self, cx: &mut Context<'_>, buf: &[u8]) -> Poll<HidResult<usize>>;
     fn poll_read(&self, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<HidResult<usize>>;
@@ -718,12 +718,12 @@ impl HidDevice {
     }
 }
 
-#[cfg(feature = "async")]
+#[cfg(feature = "__async")]
 impl HidDevice {
     /// Write asynchronously to the device.
     ///
     /// See [`write`][`Self::write`] for more information.
-    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
+    #[cfg_attr(docsrs, doc(cfg(feature = "__async")))]
     pub async fn async_write(&mut self, buf: &[u8]) -> HidResult<usize> {
         futures::future::poll_fn(|cx| self.inner.poll_write(cx, buf)).await
     }
@@ -731,7 +731,7 @@ impl HidDevice {
     /// Read asynchronously from the device
     ///
     /// See [`read`][`Self::read`] for more information.
-    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
+    #[cfg_attr(docsrs, doc(cfg(feature = "__async")))]
     pub async fn async_read(&self, buf: &mut [u8]) -> HidResult<usize> {
         futures::future::poll_fn(|cx| self.inner.poll_read(cx, buf)).await
     }

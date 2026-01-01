@@ -43,14 +43,13 @@ include = [
 
 [features]
 default = ["linux-static-hidraw", "illumos-static-libusb"]
-async = ["dep:futures"]
 linux-static-libusb = []
 linux-static-hidraw = []
 linux-shared-libusb = []
 linux-shared-hidraw = []
 linux-native = ["dep:udev", "dep:nix"]
-linux-native-async = ["linux-native", "async", "dep:async-io"]
-linux-native-tokio = ["linux-native", "async", "dep:tokio"]
+linux-native-async = ["linux-native", "__async", "dep:async-io"]
+linux-native-tokio = ["linux-native", "__async", "dep:tokio"]
 linux-native-basic-udev = ["dep:basic-udev", "dep:nix"]
 illumos-static-libusb = []
 illumos-shared-libusb = []
@@ -66,6 +65,9 @@ windows-native = [
     "windows-sys/Win32_System_Threading",
     "windows-sys/Win32_UI_Shell_PropertiesSystem"
 ]
+
+# Enables some common code to do with async
+__async = ["dep:futures"]
 
 [dependencies]
 libc = "0.2"
@@ -91,7 +93,7 @@ pkg-config = "0.3"
 
 [[example]]
 name = "co2mon-tokio"
-required-features = ["async"]
+required-features = ["__async"]
 
 [package.metadata.docs.rs]
 rustdoc-args = ["--cfg", "docsrs"]
