@@ -20,7 +20,7 @@ use std::{
 use libc::wchar_t;
 use nix::{
     errno::Errno,
-    poll::{poll, PollFd, PollFlags},
+    poll::{poll, PollFd, PollFlags, PollTimeout},
     sys::stat::{fstat, major, minor},
     unistd::{read, write},
 };
@@ -493,7 +493,7 @@ impl HidDeviceBackendBase for HidDevice {
             return Err(HidError::InvalidZeroSizeData);
         }
 
-        Ok(write(self.fd.as_raw_fd(), data)?)
+        Ok(write(self.fd.as_fd(), data)?)
     }
 
     fn read(&self, buf: &mut [u8]) -> HidResult<usize> {
@@ -503,14 +503,18 @@ impl HidDeviceBackendBase for HidDevice {
     }
 
     fn read_timeout(&self, buf: &mut [u8], timeout: i32) -> HidResult<usize> {
-        let pollfd = PollFd::new(&self.fd, PollFlags::POLLIN);
-        let res = poll(&mut [pollfd], timeout)?;
+        let poll_timeout = PollTimeout::try_from(timeout).map_err(|_| HidError::HidApiError {
+            message: format!("invalid timeout value {timeout}"),
+        })?;
+
+        let mut pollfds = [PollFd::new(self.fd.as_fd(), PollFlags::POLLIN)];
+        let res = poll(&mut pollfds, poll_timeout)?;
 
         if res == 0 {
             return Ok(0);
         }
 
-        let events = pollfd
+        let events = pollfds[0]
             .revents()
             .map(|e| e.intersects(PollFlags::POLLERR | PollFlags::POLLHUP | PollFlags::POLLNVAL));
 
@@ -520,7 +524,7 @@ impl HidDeviceBackendBase for HidDevice {
             });
         }
 
-        match read(self.fd.as_raw_fd(), buf) {
+        match read(self.fd.as_fd(), buf) {
             Ok(w) => Ok(w),
             Err(Errno::EAGAIN) | Err(Errno::EINPROGRESS) => Ok(0),
             Err(e) => Err(e.into()),
@@ -616,7 +620,7 @@ impl HidDeviceBackendBase for HidDevice {
     fn get_device_info(&self) -> HidResult<DeviceInfo> {
         // What we have is a descriptor to a file in /dev but we need a syspath
         // so we get the major/minor from there and generate our syspath
-        let devnum = fstat(self.fd.as_raw_fd())?.st_rdev;
+        let devnum = fstat(self.fd.as_fd())?.st_rdev;
         let syspath: PathBuf = format!("/sys/dev/char/{}:{}", major(devnum), minor(devnum)).into();
 
         // The clone is a bit silly but we can't implement Copy. Maybe it's not
@@ -631,7 +635,7 @@ impl HidDeviceBackendBase for HidDevice {
     }
 
     fn get_report_descriptor(&self, buf: &mut [u8]) -> HidResult<usize> {
-        let devnum = fstat(self.fd.as_raw_fd())?.st_rdev;
+        let devnum = fstat(self.fd.as_fd())?.st_rdev;
         let syspath: PathBuf = format!("/sys/dev/char/{}:{}", major(devnum), minor(devnum)).into();
 
         let descriptor = HidrawReportDescriptor::from_syspath(&syspath)?;
