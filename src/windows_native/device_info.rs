@@ -7,6 +7,10 @@ use crate::windows_native::types::{Handle, InternalBusType};
 use crate::{BusType, DeviceInfo, WcharString};
 use std::ffi::{c_void, CString};
 use std::mem::{size_of, zeroed};
+use windows::Win32::Storage::EnhancedStorage::{
+    PKEY_DeviceInterface_Bluetooth_DeviceAddress, PKEY_DeviceInterface_Bluetooth_Manufacturer,
+    PKEY_DeviceInterface_Bluetooth_ModelNumber,
+};
 use windows_sys::Win32::Devices::HumanInterfaceDevice::{
     HidD_GetManufacturerString, HidD_GetProductString, HidD_GetSerialNumberString,
 };
@@ -14,14 +18,10 @@ use windows_sys::Win32::Devices::Properties::{
     DEVPKEY_Device_CompatibleIds, DEVPKEY_Device_HardwareIds, DEVPKEY_Device_InstanceId,
     DEVPKEY_Device_Manufacturer, DEVPKEY_NAME,
 };
-use windows_sys::Win32::Foundation::{BOOLEAN, HANDLE};
-use windows_sys::Win32::Storage::EnhancedStorage::{
-    PKEY_DeviceInterface_Bluetooth_DeviceAddress, PKEY_DeviceInterface_Bluetooth_Manufacturer,
-    PKEY_DeviceInterface_Bluetooth_ModelNumber,
-};
+use windows_sys::Win32::Foundation::HANDLE;
 
 fn read_string(
-    func: unsafe extern "system" fn(HANDLE, *mut c_void, u32) -> BOOLEAN,
+    func: unsafe extern "system" fn(HANDLE, *mut c_void, u32) -> bool,
     handle: &Handle,
 ) -> WcharString {
     // Return empty string on failure to match the c implementation
@@ -32,8 +32,7 @@ fn read_string(
             string.as_mut_ptr() as _,
             (size_of::<u16>() * string.len()) as u32,
         )
-    } != 0
-    {
+    } {
         U16Str::from_slice_list(&string)
             .map(WcharString::from)
             .next()
