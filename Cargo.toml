@@ -53,7 +53,6 @@ illumos-static-libusb = []
 illumos-shared-libusb = []
 macos-shared-device = []
 windows-native = [
-    "windows/Win32_Storage_EnhancedStorage",
     "windows-sys/Win32_Devices_DeviceAndDriverInstallation",
     "windows-sys/Win32_Devices_HumanInterfaceDevice",
     "windows-sys/Win32_Devices_Properties",
@@ -74,7 +73,6 @@ basic-udev = { version = "0.1", optional = true }
 nix = { version = "0.30", optional = true, features = ["fs", "ioctl", "poll"] }
 
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.62" }
 windows-sys = { version = "0.61", features = ["Win32_Foundation"] }
 
 [build-dependencies]

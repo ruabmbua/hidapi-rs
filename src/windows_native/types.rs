@@ -2,11 +2,10 @@ use crate::windows_native::error::{WinError, WinResult};
 use crate::BusType;
 use std::mem::{size_of, zeroed};
 use std::ptr::null;
-use windows::Win32::Foundation::PROPERTYKEY;
 use windows_sys::core::GUID;
 use windows_sys::Win32::Devices::Properties::{DEVPROPTYPE, DEVPROP_TYPE_GUID};
 use windows_sys::Win32::Foundation::{
-    CloseHandle, DEVPROPKEY, FALSE, HANDLE, INVALID_HANDLE_VALUE, TRUE,
+    CloseHandle, DEVPROPKEY, FALSE, HANDLE, INVALID_HANDLE_VALUE, PROPERTYKEY, TRUE,
 };
 use windows_sys::Win32::System::Threading::{CreateEventW, INFINITE};
 use windows_sys::Win32::System::IO::{GetOverlappedResultEx, OVERLAPPED};
