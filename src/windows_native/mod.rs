@@ -80,6 +80,8 @@ pub struct HidDevice {
     feature_state: RefCell<AsyncState>,
 }
 
+unsafe impl Send for HidDevice {}
+
 struct AsyncState {
     overlapped: Box<Overlapped>,
     buffer: Vec<u8>,
@@ -390,7 +392,7 @@ fn open_device(path: &U16Str, open_rw: bool) -> WinResult<Handle> {
             null(),
             OPEN_EXISTING,
             FILE_FLAG_OVERLAPPED,
-            0,
+            null_mut(),
         )
     };
     ensure!(

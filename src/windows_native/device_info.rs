@@ -7,6 +7,7 @@ use crate::windows_native::types::{Handle, InternalBusType};
 use crate::{BusType, DeviceInfo, WcharString};
 use std::ffi::{c_void, CString};
 use std::mem::{size_of, zeroed};
+use windows_sys::core::GUID;
 use windows_sys::Win32::Devices::HumanInterfaceDevice::{
     HidD_GetManufacturerString, HidD_GetProductString, HidD_GetSerialNumberString,
 };
@@ -14,14 +15,28 @@ use windows_sys::Win32::Devices::Properties::{
     DEVPKEY_Device_CompatibleIds, DEVPKEY_Device_HardwareIds, DEVPKEY_Device_InstanceId,
     DEVPKEY_Device_Manufacturer, DEVPKEY_NAME,
 };
-use windows_sys::Win32::Foundation::{BOOLEAN, HANDLE};
-use windows_sys::Win32::Storage::EnhancedStorage::{
-    PKEY_DeviceInterface_Bluetooth_DeviceAddress, PKEY_DeviceInterface_Bluetooth_Manufacturer,
-    PKEY_DeviceInterface_Bluetooth_ModelNumber,
+use windows_sys::Win32::Foundation::{HANDLE, PROPERTYKEY};
+
+// These constants are only part of the heavyweight `windows` and not `windows-sys`,
+// so we manually define them here.
+#[allow(nonstandard_style)]
+const PKEY_DeviceInterface_Bluetooth_DeviceAddress: PROPERTYKEY = PROPERTYKEY {
+    fmtid: GUID::from_u128(0x2bd67d8b_8beb_48d5_87e0_6cda3428040a),
+    pid: 1,
+};
+#[allow(nonstandard_style)]
+const PKEY_DeviceInterface_Bluetooth_Manufacturer: PROPERTYKEY = PROPERTYKEY {
+    fmtid: GUID::from_u128(0x2bd67d8b_8beb_48d5_87e0_6cda3428040a),
+    pid: 4,
+};
+#[allow(nonstandard_style)]
+const PKEY_DeviceInterface_Bluetooth_ModelNumber: PROPERTYKEY = PROPERTYKEY {
+    fmtid: GUID::from_u128(0x2bd67d8b_8beb_48d5_87e0_6cda3428040a),
+    pid: 5,
 };
 
 fn read_string(
-    func: unsafe extern "system" fn(HANDLE, *mut c_void, u32) -> BOOLEAN,
+    func: unsafe extern "system" fn(HANDLE, *mut c_void, u32) -> bool,
     handle: &Handle,
 ) -> WcharString {
     // Return empty string on failure to match the c implementation
@@ -32,8 +47,7 @@ fn read_string(
             string.as_mut_ptr() as _,
             (size_of::<u16>() * string.len()) as u32,
         )
-    } != 0
-    {
+    } {
         U16Str::from_slice_list(&string)
             .map(WcharString::from)
             .next()

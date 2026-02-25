@@ -55,8 +55,8 @@ pub fn check_config(ret: CONFIGRET, expected: CONFIGRET) -> WinResult<()> {
     }
 }
 
-pub fn check_boolean(ret: BOOLEAN) -> WinResult<()> {
-    if ret == 0 {
+pub fn check_boolean(ret: bool) -> WinResult<()> {
+    if !ret {
         Err(Win32Error::last().into())
     } else {
         Ok(())
