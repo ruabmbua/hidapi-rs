@@ -576,7 +576,14 @@ impl HidDeviceBackendBase for HidDevice {
     }
 
     fn send_output_report(&self, buf: &[u8]) -> HidResult<()> {
-        let res = match unsafe { hidraw_ioc_set_output(self.fd.as_raw_fd(), buf) } {
+        // Have to crate owned buffer, because its not safe to cast shared
+        // reference to mutable reference, even if the underlying function never
+        // tries to mutate it.
+        let mut d = buf.to_vec();
+
+        // The ioctl is marked as read-write so we need to mess with the
+        // mutability even though nothing should get written
+        let res = match unsafe { hidraw_ioc_set_output(self.fd.as_raw_fd(), &mut d) } {
             Ok(n) => n,
             Err(e) => {
                 return Err(HidError::HidApiError {
