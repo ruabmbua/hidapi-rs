@@ -1,6 +1,6 @@
 //! The IOCTL calls we need for the native linux backend
 
-use nix::{ioctl_read, ioctl_read_buf, ioctl_write_buf};
+use nix::{ioctl_read, ioctl_readwrite_buf};
 
 // From linux/hidraw.h
 const HIDRAW_IOC_MAGIC: u8 = b'H';
@@ -17,22 +17,27 @@ ioctl_read!(
     libc::c_int
 );
 
-ioctl_write_buf!(
+ioctl_readwrite_buf!(
     hidraw_ioc_set_feature,
     HIDRAW_IOC_MAGIC,
     HIDRAW_SET_FEATURE,
     u8
 );
-ioctl_read_buf!(
+ioctl_readwrite_buf!(
     hidraw_ioc_get_feature,
     HIDRAW_IOC_MAGIC,
     HIDRAW_GET_FEATURE,
     u8
 );
-ioctl_write_buf!(
+ioctl_readwrite_buf!(
     hidraw_ioc_set_output,
     HIDRAW_IOC_MAGIC,
     HIDRAW_SET_OUTPUT,
     u8
 );
-ioctl_read_buf!(hidraw_ioc_get_input, HIDRAW_IOC_MAGIC, HIDRAW_GET_INPUT, u8);
+ioctl_readwrite_buf!(
+    hidraw_ioc_get_input,
+    HIDRAW_IOC_MAGIC,
+    HIDRAW_GET_INPUT,
+    u8
+);
