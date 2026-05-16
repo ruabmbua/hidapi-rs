@@ -35,9 +35,4 @@ ioctl_readwrite_buf!(
     HIDRAW_SET_OUTPUT,
     u8
 );
-ioctl_readwrite_buf!(
-    hidraw_ioc_get_input,
-    HIDRAW_IOC_MAGIC,
-    HIDRAW_GET_INPUT,
-    u8
-);
+ioctl_readwrite_buf!(hidraw_ioc_get_input, HIDRAW_IOC_MAGIC, HIDRAW_GET_INPUT, u8);
