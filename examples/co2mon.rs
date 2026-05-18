@@ -11,27 +11,27 @@
 use hidapi::{HidApi, HidError};
 use std::io;
 
-const CODE_TEMPERATURE: u8 = 0x42;
-const CODE_CONCENTRATION: u8 = 0x50;
-const HID_TIMEOUT: i32 = 5000;
-const DEV_VID: u16 = 0x04d9;
-const DEV_PID: u16 = 0xa052;
-const PACKET_SIZE: usize = 8;
+pub const CODE_TEMPERATURE: u8 = 0x42;
+pub const CODE_CONCENTRATION: u8 = 0x50;
+pub const HID_TIMEOUT: i32 = 5000;
+pub const DEV_VID: u16 = 0x04d9;
+pub const DEV_PID: u16 = 0xa052;
+pub const PACKET_SIZE: usize = 8;
 
-type Packet = [u8; PACKET_SIZE];
+pub type Packet = [u8; PACKET_SIZE];
 
-enum CO2Result {
+pub enum CO2Result {
     Temperature(f32),
     Concentration(u16),
     Unknown(u8, u16),
     Error(&'static str),
 }
 
-fn decode_temperature(value: u16) -> f32 {
+pub fn decode_temperature(value: u16) -> f32 {
     (value as f32) * 0.0625 - 273.15
 }
 
-fn decrypt(buf: Packet) -> Packet {
+pub fn decrypt(buf: Packet) -> Packet {
     let mut res: [u8; PACKET_SIZE] = [
         (buf[3] << 5) | (buf[2] >> 3),
         (buf[2] << 5) | (buf[4] >> 3),
@@ -52,7 +52,7 @@ fn decrypt(buf: Packet) -> Packet {
     res
 }
 
-fn decode_buf(buf: Packet) -> CO2Result {
+pub fn decode_buf(buf: Packet) -> CO2Result {
     // Do we need to decrypt the data?
     let res = if buf[4] == 0x0d { buf } else { decrypt(buf) };
 
@@ -82,7 +82,7 @@ fn decode_buf(buf: Packet) -> CO2Result {
     }
 }
 
-fn invalid_data_err(msg: impl Into<String>) -> HidError {
+pub fn invalid_data_err(msg: impl Into<String>) -> HidError {
     HidError::IoError {
         error: io::Error::new(io::ErrorKind::InvalidData, msg.into()),
     }

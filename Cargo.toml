@@ -63,9 +63,21 @@ windows-native = [
     "windows-sys/Win32_UI_Shell_PropertiesSystem"
 ]
 
+# Enable async via the async-io crate
+async-io = ["__async", "dep:async-io"]
+
+#Enable async via the tokio crate
+tokio = ["__async", "dep:tokio"]
+
+# Enables some common code to do with async
+__async = ["dep:futures"]
+
 [dependencies]
 libc = "0.2"
 cfg-if = "1"
+futures = { version = "0.3", optional = true }
+async-io = { version = "2", optional = true }
+tokio = { version = "1", optional = true, features = ["net"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 udev = { version = "0.9", optional = true }
@@ -75,9 +87,16 @@ nix = { version = "0.30", optional = true, features = ["fs", "ioctl", "poll"] }
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Foundation"] }
 
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+tokio = { version = "1", features = ["rt", "macros", "time"] }
+
 [build-dependencies]
 cc = "1.2"
 pkg-config = "0.3"
+
+[[example]]
+name = "co2mon-tokio"
+required-features = ["__async"]
 
 [package.metadata.docs.rs]
 rustdoc-args = ["--cfg", "docsrs"]

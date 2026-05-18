@@ -18,6 +18,18 @@ use std::{
 };
 
 use libc::wchar_t;
+
+#[cfg(feature = "async-io")]
+use async_io::Async;
+#[cfg(feature = "__async")]
+use futures::task::{Context, Poll};
+#[cfg(feature = "__async")]
+use std::task::ready;
+#[cfg(feature = "tokio")]
+use tokio::io::unix::AsyncFd;
+
+use cfg_if::cfg_if;
+
 use nix::{
     errno::Errno,
     poll::{poll, PollFd, PollFlags, PollTimeout},
@@ -412,7 +424,12 @@ fn parse_hid_vid_pid(s: &str) -> Option<(u16, u16, u16)> {
 /// Object for accessing the HID device
 pub struct HidDevice {
     blocking: Cell<bool>,
+    #[cfg(not(feature = "__async"))]
     fd: OwnedFd,
+    #[cfg(feature = "async-io")]
+    fd: Async<OwnedFd>,
+    #[cfg(feature = "tokio")]
+    fd: AsyncFd<OwnedFd>,
     info: RefCell<Option<DeviceInfo>>,
 }
 
@@ -463,11 +480,29 @@ impl HidDevice {
             });
         }
 
-        Ok(Self {
-            blocking: Cell::new(true),
-            fd,
-            info: RefCell::new(None),
-        })
+        cfg_if! {
+            if #[cfg(feature = "async-io")] {
+                let fd = Async::new_nonblocking(fd)?;
+                Ok(Self {
+                    blocking: Cell::new(true),
+                    fd,
+                    info: RefCell::new(None),
+                })
+            } else if #[cfg(feature = "tokio")] {
+                let fd = AsyncFd::new(fd)?;
+                Ok(Self {
+                    blocking: Cell::new(true),
+                    fd,
+                    info: RefCell::new(None),
+                })
+            } else {
+                Ok(Self {
+                    blocking: Cell::new(true),
+                    fd,
+                    info: RefCell::new(None),
+                })
+            }
+        }
     }
 
     fn info(&self) -> HidResult<Ref<'_, DeviceInfo>> {
@@ -656,6 +691,60 @@ impl HidDeviceBackendBase for HidDevice {
         let min_size = buf.len().min(descriptor.0.len());
         buf[..min_size].copy_from_slice(&descriptor.0[..min_size]);
         Ok(min_size)
+    }
+}
+
+#[cfg(feature = "async-io")]
+impl super::HidDeviceBackendBaseAsync for HidDevice {
+    fn poll_write(&mut self, cx: &mut Context<'_>, buf: &[u8]) -> Poll<HidResult<usize>> {
+        if buf.is_empty() {
+            return Poll::Ready(Err(HidError::InvalidZeroSizeData));
+        }
+
+        loop {
+            match write(self.fd.as_raw_fd(), buf) {
+                Err(Errno::EWOULDBLOCK) => {}
+                res => return Poll::Ready(res).map_err(|e| e.into()),
+            }
+            let _ = ready!(self.fd.poll_writable(cx));
+        }
+    }
+
+    fn poll_read(&self, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<HidResult<usize>> {
+        loop {
+            match read(self.fd.as_raw_fd(), buf) {
+                Err(Errno::EWOULDBLOCK) => {}
+                res => return Poll::Ready(res).map_err(|e| e.into()),
+            }
+            let _ = ready!(self.fd.poll_readable(cx));
+        }
+    }
+}
+
+#[cfg(feature = "tokio")]
+impl super::HidDeviceBackendBaseAsync for HidDevice {
+    fn poll_write(&mut self, cx: &mut Context<'_>, buf: &[u8]) -> Poll<HidResult<usize>> {
+        if buf.is_empty() {
+            return Poll::Ready(Err(HidError::InvalidZeroSizeData));
+        }
+
+        loop {
+            let mut guard = ready!(self.fd.poll_write_ready(cx))?;
+            match write(self.fd.as_raw_fd(), buf) {
+                Err(Errno::EWOULDBLOCK) => guard.clear_ready(),
+                res => return Poll::Ready(res).map_err(|e| e.into()),
+            }
+        }
+    }
+
+    fn poll_read(&self, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<HidResult<usize>> {
+        loop {
+            let mut guard = ready!(self.fd.poll_read_ready(cx))?;
+            match read(self.fd.as_raw_fd(), buf) {
+                Err(Errno::EWOULDBLOCK) => guard.clear_ready(),
+                res => return Poll::Ready(res).map_err(|e| e.into()),
+            }
+        }
     }
 }
 
