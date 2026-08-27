@@ -98,7 +98,13 @@ fn device_to_hid_device_info(raw_device: &udev::Device) -> Option<Vec<DeviceInfo
         _ => return None,
     };
     let name = device.property_value("HID_NAME")?;
-    let serial = device.property_value("HID_UNIQ")?;
+
+    // The C version parses HID_UNIQ from the raw uevent sysfs text, where the
+    // kernel always includes HID_UNIQ= even when empty, returning an empty
+    // string. property_value() can instead return None for an empty value, so
+    // we replace None with an empty string to avoid dropping the entry from
+    // enumeration.
+    let serial = device.property_value("HID_UNIQ").unwrap_or(OsStr::new(""));
     let path = match raw_device
         .devnode()
         .map(|p| p.as_os_str().to_os_string().into_vec())
