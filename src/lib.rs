@@ -493,7 +493,7 @@ trait HidDeviceBackendBase {
     fn send_feature_report(&self, data: &[u8]) -> HidResult<()>;
     fn get_feature_report(&self, buf: &mut [u8]) -> HidResult<usize>;
     fn send_output_report(&self, data: &[u8]) -> HidResult<()>;
-    #[cfg(any(hidapi, target_os = "linux"))]
+    #[cfg(any(hidapi, target_os = "linux", target_os = "windows"))]
     fn get_input_report(&self, data: &mut [u8]) -> HidResult<usize>;
     fn set_blocking_mode(&self, blocking: bool) -> HidResult<()>;
     fn get_device_info(&self) -> HidResult<DeviceInfo>;
@@ -609,6 +609,18 @@ impl HidDevice {
     /// in the first byte).
     pub fn get_feature_report(&self, buf: &mut [u8]) -> HidResult<usize> {
         self.inner.get_feature_report(buf)
+    }
+
+    /// Get an input report from a HID device.
+    /// 
+    /// Set the first byte of `buf` to the 'Report ID' of the report to be read.
+    /// Upon return, the first byte will still contain the Report ID, and the
+    /// report data will start in `buf[1]`.
+    ///
+    /// If successful, returns the number of bytes read plus one for the report ID (which is still
+    /// in the first byte).
+    pub fn get_input_report(&self, buf: &mut [u8]) -> HidResult<usize> {
+        self.inner.get_input_report(buf)
     }
 
     /// Send a Output report to the device.
