@@ -39,6 +39,8 @@
 //!
 //! # Feature flags
 //!
+//! ## Backends
+//!
 //! - `linux-static-libusb`: uses statically linked `libusb` backend on Linux
 //! - `linux-static-hidraw`: uses statically linked `hidraw` backend on Linux (default)
 //! - `linux-shared-libusb`: uses dynamically linked `libusb` backend on Linux
@@ -48,6 +50,15 @@
 //! - `illumos-shared-libusb`: uses statically linked `hidraw` backend on Illumos
 //! - `macos-shared-device`: enables shared access to HID devices on MacOS
 //! - `windows-native`: talks to hid.dll directly without using the `hidapi` C library
+//!
+//! ## Async backends
+//!
+//! For some backends (`linux-native` for now) we support some operations
+//! running async. You can choose what to use. If you are not using tokio
+//! yourself, select `async-io`
+//!
+//! - `async-io`: use smol-rs's [async-io](https://crates.io/crates/async-io) to enable async support
+//! - `tokio`: use [tokio](https://crates.io/crates/tokio) to enable async support
 //!
 //! ## Linux backends
 //!
@@ -65,12 +76,24 @@ mod error;
 mod ffi;
 
 use cfg_if::cfg_if;
+
+// You can only select a single async backend for us
+#[cfg(all(feature = "async-io", feature = "tokio"))]
+compile_error!("A maximum of one async backend can be selected");
+
+// Catch async being enabled with an unsupported backend
+#[cfg(all(feature = "__async", not(feature = "linux-native")))]
+compile_error!("async is only supported for some backends");
+
 use libc::wchar_t;
 use std::ffi::CStr;
 use std::ffi::CString;
 use std::fmt;
 use std::fmt::Debug;
 use std::sync::Mutex;
+
+#[cfg(feature = "__async")]
+use futures::task::{Context, Poll};
 
 pub use error::HidError;
 
@@ -92,6 +115,8 @@ cfg_if! {
 }
 
 // Automatically implement the top trait
+//
+// In this block we set up what the trait should be for the sync version
 cfg_if! {
     if #[cfg(target_os = "windows")] {
         #[cfg_attr(docsrs, doc(cfg(target_os = "windows")))]
@@ -102,8 +127,8 @@ cfg_if! {
             /// Get the container ID for a HID device
             fn get_container_id(&self) -> HidResult<GUID>;
         }
-        trait HidDeviceBackend: HidDeviceBackendBase + HidDeviceBackendWindows + Send {}
-        impl<T> HidDeviceBackend for T where T: HidDeviceBackendBase + HidDeviceBackendWindows + Send {}
+        trait HidDeviceBackendSync: HidDeviceBackendBase + HidDeviceBackendWindows + Send {}
+        impl<T> HidDeviceBackendSync for T where T: HidDeviceBackendBase + HidDeviceBackendWindows + Send {}
     } else if #[cfg(target_os = "macos")] {
         #[cfg_attr(docsrs, doc(cfg(target_os = "macos")))]
         mod macos;
@@ -115,11 +140,24 @@ cfg_if! {
             /// Check if the device was opened in exclusive mode.
             fn is_open_exclusive(&self) -> HidResult<bool>;
         }
-        trait HidDeviceBackend: HidDeviceBackendBase + HidDeviceBackendMacos + Send {}
-        impl<T> HidDeviceBackend for T where T: HidDeviceBackendBase + HidDeviceBackendMacos + Send {}
+        trait HidDeviceBackendSync: HidDeviceBackendBase + HidDeviceBackendMacos + Send {}
+        impl<T> HidDeviceBackendSync for T where T: HidDeviceBackendBase + HidDeviceBackendMacos + Send {}
     } else {
-        trait HidDeviceBackend: HidDeviceBackendBase + Send {}
-        impl<T> HidDeviceBackend for T where T: HidDeviceBackendBase + Send {}
+            trait HidDeviceBackendSync: HidDeviceBackendBase + Send {}
+            impl<T> HidDeviceBackendSync for T where T: HidDeviceBackendBase + Send {}
+    }
+}
+
+// Automatically implement the top trait
+//
+// In this block we set up whether the top-level trait should include the async trait
+cfg_if! {
+    if #[cfg(feature = "__async")] {
+        trait HidDeviceBackend: HidDeviceBackendSync + HidDeviceBackendBaseAsync {}
+        impl<T> HidDeviceBackend for T where T: HidDeviceBackendSync + HidDeviceBackendBaseAsync {}
+    } else {
+        trait HidDeviceBackend: HidDeviceBackendSync {}
+        impl<T> HidDeviceBackend for T where T: HidDeviceBackendSync {}
     }
 }
 
@@ -509,6 +547,13 @@ trait HidDeviceBackendBase {
     }
 }
 
+/// Trait which the different backends must implement if they support async code
+#[cfg(feature = "__async")]
+trait HidDeviceBackendBaseAsync {
+    fn poll_write(&mut self, cx: &mut Context<'_>, buf: &[u8]) -> Poll<HidResult<usize>>;
+    fn poll_read(&self, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<HidResult<usize>>;
+}
+
 pub struct HidDevice {
     inner: Box<dyn HidDeviceBackend>,
 }
@@ -683,5 +728,24 @@ impl HidDevice {
     /// Get [`DeviceInfo`] from a HID device.
     pub fn get_device_info(&self) -> HidResult<DeviceInfo> {
         self.inner.get_device_info()
+    }
+}
+
+#[cfg(feature = "__async")]
+impl HidDevice {
+    /// Write asynchronously to the device.
+    ///
+    /// See [`write`][`Self::write`] for more information.
+    #[cfg_attr(docsrs, doc(cfg(feature = "__async")))]
+    pub async fn async_write(&mut self, buf: &[u8]) -> HidResult<usize> {
+        futures::future::poll_fn(|cx| self.inner.poll_write(cx, buf)).await
+    }
+
+    /// Read asynchronously from the device
+    ///
+    /// See [`read`][`Self::read`] for more information.
+    #[cfg_attr(docsrs, doc(cfg(feature = "__async")))]
+    pub async fn async_read(&self, buf: &mut [u8]) -> HidResult<usize> {
+        futures::future::poll_fn(|cx| self.inner.poll_read(cx, buf)).await
     }
 }
