@@ -11,7 +11,7 @@ authors = [
 ]
 repository = "https://github.com/ruabmbua/hidapi-rs"
 description = "Rust-y wrapper around hidapi"
-license = "MIT"
+license = "MIT AND BSD-3-Clause"
 keywords = ["hid", "api", "usb", "binding", "wrapper"]
 build = "build.rs"
 links = "hidapi"

@@ -1,4 +1,4 @@
-# hidapi [![Version](https://img.shields.io/crates/v/hidapi.svg)](https://crates.io/crates/hidapi) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/Osspial/hidapi-rs/blob/master/LICENSE.txt) [![Documentation](https://docs.rs/hidapi/badge.svg)](https://docs.rs/hidapi) [![Chat](https://img.shields.io/badge/discord-devroom-blue.svg)](https://discordapp.com/invite/3ahhJGN)
+# hidapi [![Version](https://img.shields.io/crates/v/hidapi.svg)](https://crates.io/crates/hidapi) [![License: MIT AND BSD-3-Clause](https://img.shields.io/badge/License-MIT%20AND%20BSD--3--Clause-yellow.svg)](#license) [![Documentation](https://docs.rs/hidapi/badge.svg)](https://docs.rs/hidapi) [![Chat](https://img.shields.io/badge/discord-devroom-blue.svg)](https://discordapp.com/invite/3ahhJGN)
 
 This crate provides a rust abstraction over the features of the C library
 [hidapi](https://github.com/libusb/hidapi). Based off of
@@ -44,3 +44,9 @@ println!("Wrote: {:?} byte(s)", res);
 
 # Documentation
 Available at [docs.rs](https://docs.rs/hidapi).
+
+# License
+
+The Rust code in this crate is licensed under the MIT license, see [LICENSE.txt](LICENSE.txt).
+
+The bundled [hidapi](https://github.com/libusb/hidapi) C library in `etc/hidapi` is used under its BSD-3-Clause license option, see `etc/hidapi/LICENSE*.txt`.
