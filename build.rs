@@ -40,6 +40,8 @@ fn main() {
         compile_openbsd();
     } else if target.contains("illumos") {
         compile_illumos();
+    } else if target.contains("hurd") {
+        compile_hurd();
     } else {
         panic!("Unsupported target os for hidapi-rs");
     }
@@ -200,4 +202,11 @@ fn compile_macos() {
     println!("cargo:rustc-link-lib=framework=IOKit");
     println!("cargo:rustc-link-lib=framework=CoreFoundation");
     println!("cargo:rustc-link-lib=framework=AppKit")
+}
+
+fn compile_hurd() {
+    pkg_config::probe_library("hidapi-libusb").expect("Unable to find hidapi");
+    pkg_config::probe_library("libusb-1.0").expect("Unable to find libusb-1.0");
+    println!("cargo:rustc-cfg=libusb");
+    println!("cargo:rustc-cfg=hidapi");
 }
