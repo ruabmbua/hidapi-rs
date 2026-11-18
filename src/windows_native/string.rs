@@ -66,6 +66,11 @@ impl U16Str {
     pub fn as_slice(&self) -> &[u16] {
         &self.0[..self.0.len() - 1]
     }
+
+    pub fn as_slice_with_nul(&self) -> &[u16] {
+        &self.0
+    }
+
     pub fn as_slice_mut(&mut self) -> &mut [u16] {
         let end = self.0.len() - 1;
         &mut self.0[..end]
