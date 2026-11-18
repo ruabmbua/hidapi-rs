@@ -175,17 +175,8 @@ fn get_usb_info(dev: &mut DeviceInfo, mut dev_node: DevNode) -> WinResult<()> {
 
         let device_id: U16String = usb_dev_node.get_property(DEVPKEY_Device_InstanceId)?;
 
-        // Extract substring after last '\\' of Instance ID.
-        // For USB devices it may contain device's serial number.
-        // https://docs.microsoft.com/windows-hardware/drivers/install/instance-ids
-        //
-        if let Some(start) = device_id
-            .as_slice()
-            .rsplit(|c| *c != b'&' as u16)
-            .next()
-            .and_then(|s| s.iter().rposition(|c| *c != b'\\' as u16))
-        {
-            dev.serial_number = U16Str::from_slice(&device_id.as_slice()[(start + 1)..]).into();
+        if let Some(serial) = usb_serial_from_instance_id(&device_id) {
+            dev.serial_number = serial.into();
         }
     }
 
@@ -194,6 +185,20 @@ fn get_usb_info(dev: &mut DeviceInfo, mut dev_node: DevNode) -> WinResult<()> {
     }
 
     Ok(())
+}
+
+fn usb_serial_from_instance_id(device_id: &U16Str) -> Option<&U16Str> {
+    let units = device_id.as_slice_with_nul();
+    let separator = units.iter().rposition(|&unit| unit == u16::from(b'\\'))?;
+    let serial = &units[separator + 1..];
+
+    // Match the C backend: an ampersand in the instance component indicates
+    // a bus-generated ID, not a USB serial number.
+    if serial.len() == 1 || serial.contains(&u16::from(b'&')) {
+        return None;
+    }
+
+    Some(U16Str::from_slice(serial))
 }
 
 // HidD_GetProductString/HidD_GetManufacturerString/HidD_GetSerialNumberString is not working for BLE HID devices
@@ -238,4 +243,33 @@ fn extract_int_token_value(u16str: &U16Str, token: &str) -> Option<u32> {
     char::decode_utf16(u16str.as_slice()[start..].iter().copied())
         .map_while(|c| c.ok().and_then(|c| c.to_digit(16)))
         .reduce(|l, r| l * 16 + r)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extracts_usb_serial_from_instance_id() {
+        let id = CString::new(r"USB\VID_1234&PID_5678\Serial123").unwrap();
+        let id = U16String::try_from(id.as_c_str()).unwrap();
+        assert_eq!(
+            usb_serial_from_instance_id(&id).map(U16Str::to_string),
+            Some("Serial123".to_owned())
+        );
+    }
+
+    #[test]
+    fn skips_bus_generated_instance_ids_without_panicking() {
+        for id in [
+            r"USB\VID_1234&PID_5678\5&12345678&0&2",
+            r"USB\VID_1234&PID_5678\3&12345678&0&",
+            r"USB\VID_1234&PID_5678\",
+            "no-instance-component",
+        ] {
+            let id = CString::new(id).unwrap();
+            let id = U16String::try_from(id.as_c_str()).unwrap();
+            assert!(usb_serial_from_instance_id(&id).is_none(), "{id:?}");
+        }
+    }
 }
