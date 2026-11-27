@@ -608,6 +608,10 @@ impl HidDevice {
     /// If successful, returns the number of bytes read plus one for the report ID (which is still
     /// in the first byte).
     pub fn get_feature_report(&self, buf: &mut [u8]) -> HidResult<usize> {
+        // The libusb backend reads data[0] before any length check; never pass an empty buffer.
+        if buf.is_empty() {
+            return Err(HidError::InvalidZeroSizeData);
+        }
         self.inner.get_feature_report(buf)
     }
 
